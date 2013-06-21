@@ -11,7 +11,22 @@
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
-unsigned char onewire_bus_reset(unsigned char intf_mask);
+typedef struct
+	{
+	uint32_t peripheral_addr;
+    uint16_t data_pin;
+
+	uint16_t strong_pull_up_pin;
+	bool strong_pull_up_enable;
+    
+	} onewire_handler_s;
+
+
+//------------------------------------------------------------------------------
+
+int onewire_bus_init(onewire_handler_s *onewire_handler);
+int onewire_bus_reset(onewire_handler_s *onewire_handler);
+
 
 void onewire_write_byte(unsigned char intf_mask, unsigned char byte);
 void onewire_write_bit(unsigned char intf_mask, unsigned char bit);
