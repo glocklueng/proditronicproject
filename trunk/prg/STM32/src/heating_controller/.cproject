@@ -36,8 +36,9 @@
 									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/thirdparty/STM32F10x_StdPeriph_Lib/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x"/>
 									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/thirdparty/STM32F10x_StdPeriph_Lib/Libraries/STM32F10x_StdPeriph_Driver/inc"/>
 									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/thirdparty/FreeRTOS/FreeRTOS/Source/include"/>
+									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/lib"/>
 									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/commlib"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
+									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/${ProjName}/src"/>
 								</option>
 								<option id="gnu.c.compiler.option.preprocessor.def.symbols.961967078" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="STM32F10X_HD"/>
@@ -58,8 +59,9 @@
 									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/thirdparty/STM32F10x_StdPeriph_Lib/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x"/>
 									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/thirdparty/STM32F10x_StdPeriph_Lib/Libraries/STM32F10x_StdPeriph_Driver/inc"/>
 									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/thirdparty/FreeRTOS/FreeRTOS/Source/include"/>
+									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/lib"/>
 									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/commlib"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
+									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/${ProjName}/src"/>
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.705994948" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="STM32F10X_HD"/>
@@ -89,8 +91,9 @@
 									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/thirdparty/STM32F10x_StdPeriph_Lib/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x"/>
 									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/thirdparty/STM32F10x_StdPeriph_Lib/Libraries/STM32F10x_StdPeriph_Driver/inc"/>
 									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/thirdparty/FreeRTOS/FreeRTOS/Source/include"/>
+									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/lib"/>
 									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/commlib"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src}&quot;"/>
+									<listOptionValue builtIn="false" value="${WorkspaceDirPath}/${ProjName}/src"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1843231026" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
@@ -102,6 +105,7 @@
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="STM32F10x"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="STM32F10x_StdPeriph_Driver"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="commlib"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="lib"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="startup"/>
 					</sourceEntries>

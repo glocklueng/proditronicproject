@@ -21,6 +21,7 @@
 #include "FreeRTOSConfig.h"
 
 #include "serial_port.h"
+#include "ksystem.h"
 
 
 #define mainECHO_TASK_PRIORITY				( tskIDLE_PRIORITY + 1 )
@@ -56,10 +57,44 @@ void  Delay (uint32_t nCount)
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
+ktimer_spec_s timer_1;
+static int cntr= 0;
+
+
+void led_switch()
+	{
+	static char ledstate= 0;
+
+
+	if (cntr++ != (25000-1))
+		return;
+
+	cntr= 0;
+
+
+	if (ledstate)
+		{
+		ledstate= 0;
+		GPIO_ResetBits(GPIOB , GPIO_Pin_0 | GPIO_Pin_1);
+		}
+	else
+		{
+		ledstate= 1;
+		GPIO_SetBits(GPIOB , GPIO_Pin_0 | GPIO_Pin_1);
+		}
+
+	}
+
+
+//------------------------------------------------------------------------------
+
 int main()
 	{
 
 	USART_InitTypeDef USART_InitStructure;
+
+
+
 
 
 	GPIO_Configuration();
@@ -68,6 +103,7 @@ int main()
 	prvSetupHardware();
 
 
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
 
 	USART_InitStructure.USART_BaudRate = 57600;
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
@@ -75,13 +111,28 @@ int main()
 	USART_InitStructure.USART_Parity = USART_Parity_No;
 
 	serial_port_init(1, &USART_InitStructure); // console
-	serial_port_rx_timeout_set(1, 5000);
+	serial_port_rx_timeout_set(1, 1000);
+
+
+
+	ktimer_init();
+
+	timer_1.value_usec= 3000000;
+	timer_1.interval_usec= 20;
+	timer_1.callback= led_switch;
+
+	ktimer_create(&timer_1);
+
+
 
 
 	xTaskCreate( prvUSARTEchoTask, ( signed char * ) "Echo", configMINIMAL_STACK_SIZE, NULL, mainECHO_TASK_PRIORITY, NULL);
 
-
 	vTaskStartScheduler();
+
+
+	while (1)
+		;
 
 	return 0;
 	}
@@ -125,6 +176,14 @@ void NVIC_Configuration(void)
 	NVIC_Init(&NVIC_InitStructure);
 
 
+	// Enable the TIM2 Interrupt
+	NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+
+
 
 	}
 
@@ -144,6 +203,7 @@ static void prvUSARTEchoTask(void *pvParameters)
 		{
 
 		result= serial_port_read(1, rxbuff, 32);
+
 
 		switch (result)
 			{
@@ -177,9 +237,9 @@ static void prvUSARTEchoTask(void *pvParameters)
 			}
 
 //		GPIO_SetBits(GPIOB , GPIO_Pin_0 | GPIO_Pin_1);
+//		vTaskDelay(1000);
 //		GPIO_ResetBits(GPIOB , GPIO_Pin_0 | GPIO_Pin_1);
 
-	//	vTaskDelay(1000);
 
 	    }
 
@@ -202,7 +262,15 @@ void vApplicationStackOverflowHook( xTaskHandle pxTask, signed char *pcTaskName 
 	parameters are corrupt then inspect pxCurrentTCB to find which was the
 	offending task. */
 
-	GPIO_ResetBits(GPIOB , GPIO_Pin_0 | GPIO_Pin_1);
+
+	while (1)
+		{
+		GPIO_ResetBits(GPIOB , GPIO_Pin_0 | GPIO_Pin_1);
+		Delay(300000);
+		GPIO_SetBits(GPIOB , GPIO_Pin_0 | GPIO_Pin_1);
+		Delay(300000);
+		}
+
 
 	( void ) pxTask;
 	( void ) pcTaskName;
