@@ -50,5 +50,10 @@
 			<type>2</type>
 			<locationURI>WORKSPACE_LOC/commlib</locationURI>
 		</link>
+		<link>
+			<name>lib</name>
+			<type>2</type>
+			<locationURI>WORKSPACE_LOC/lib</locationURI>
+		</link>
 	</linkedResources>
 </projectDescription>
