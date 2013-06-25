@@ -24,7 +24,12 @@
 #include "ksystem.h"
 
 
-#define mainECHO_TASK_PRIORITY				( tskIDLE_PRIORITY + 1 )
+#include "1wire_thr.h"
+
+
+
+#define mainECHO_TASK_PRIORITY					( tskIDLE_PRIORITY + 1 )
+#define mainONEWIRE_TASK_PRIORITY				( tskIDLE_PRIORITY + 1 )
 
 //using namespace std;
 
@@ -66,8 +71,8 @@ void led_switch()
 	static char ledstate= 0;
 
 
-	if (cntr++ != (25000-1))
-		return;
+	//if (cntr++ != (25000-1))
+	//	return;
 
 	cntr= 0;
 
@@ -95,6 +100,12 @@ int main()
 
 
 
+	// zatanowic sie czy dla 1-wire wyjscie PP czy OC !!!
+	// zatanowic sie czy dla 1-wire wyjscie PP czy OC !!!
+	// zatanowic sie czy dla 1-wire wyjscie PP czy OC !!!
+	// zatanowic sie czy dla 1-wire wyjscie PP czy OC !!!
+
+
 
 
 	GPIO_Configuration();
@@ -114,12 +125,23 @@ int main()
 	serial_port_rx_timeout_set(1, 1000);
 
 
-
 	ktimer_init();
 
 
+	timer_1.value_usec= 3000000;
+	timer_1.interval_usec= 1000000;
+	timer_1.callback= led_switch;
+	timer_1.nrepeat= 0;
 
-	xTaskCreate( prvUSARTEchoTask, ( signed char * ) "Echo", configMINIMAL_STACK_SIZE, NULL, mainECHO_TASK_PRIORITY, NULL);
+	//ktimer_create(&timer_1);
+
+
+
+
+	xTaskCreate(prvUSARTEchoTask, (signed char *)"Echo", configMINIMAL_STACK_SIZE, NULL, mainECHO_TASK_PRIORITY, NULL);
+	xTaskCreate(prvOneWireTask, (signed char *)"1Wire", configMINIMAL_STACK_SIZE, NULL, mainONEWIRE_TASK_PRIORITY, NULL);
+
+
 
 	vTaskStartScheduler();
 
@@ -136,14 +158,14 @@ int main()
 void GPIO_Configuration(void)
 	{
 	GPIO_InitTypeDef GPIO_InitStructure;
-
+/*
 	RCC_APB2PeriphClockCmd( RCC_APB2Periph_GPIOB | RCC_APB2Periph_GPIOC , ENABLE);
 
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
-
+*/
 	}
 
 //------------------------------------------------------------------------------

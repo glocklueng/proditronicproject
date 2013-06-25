@@ -3,6 +3,8 @@
 
 //------------------------------------------------------------------------------
 
+//------------------------------------------------------------------------------
+
 typedef struct
 	{
 
@@ -11,7 +13,9 @@ typedef struct
 	int value_usec;
 	int interval_usec;
 
-	void (*callback)(void);
+	void (*callback)(void *);
+	void *callback_param;
+
 	int nrepeat;	// liczba powtórzeñ, 0 - w nieskoñczonoœæ; dla interval_usec > 0
 
 
