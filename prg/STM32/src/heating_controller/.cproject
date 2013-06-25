@@ -42,6 +42,7 @@
 								</option>
 								<option id="gnu.c.compiler.option.preprocessor.def.symbols.961967078" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="STM32F10X_HD"/>
+									<listOptionValue builtIn="false" value="__STM32__"/>
 									<listOptionValue builtIn="false" value="USE_STDPERIPH_DRIVER"/>
 									<listOptionValue builtIn="false" value="GCC_ARMCM3"/>
 								</option>

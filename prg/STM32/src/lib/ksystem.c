@@ -143,7 +143,7 @@ void TIM2_IRQHandler(void)
 			// time elapsed
 
 			if (ktimer_spec->callback != NULL)
-				ktimer_spec->callback();
+				ktimer_spec->callback(ktimer_spec->callback_param);
 
 			wdlist_entry->data= NULL;
 			wdlist_delete(&ktimer_oneshot_timer_list, wdlist_entry);
@@ -171,7 +171,7 @@ void TIM2_IRQHandler(void)
 				// time elapsed
 
 				if (ktimer_spec->callback)
-					ktimer_spec->callback();
+					ktimer_spec->callback(ktimer_spec->callback_param);
 
 				ktimer_spec->remain_usec= ktimer_spec->interval_usec;
 
