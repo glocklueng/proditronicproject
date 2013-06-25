@@ -161,16 +161,30 @@ int onewire_bus_reset(onewire_handler_s *onewire_handler)
 	// wymuszenie stanu HI na magistrali
 	// pin jako wejscie
 
+
+
+
+	timer_1.value_usec= 3000000;
+	timer_1.interval_usec= 20;
+	timer_1.callback= led_switch;
+	timer_1.nrepeat= 1;
+
+	ktimer_create(&timer_1);
+
+
+
 	GPIO_InitStructure.GPIO_Mode= GPIO_Mode_IPU;
 	GPIO_Init((GPIO_TypeDef *)onewire_handler->peripheral_addr, &GPIO_InitStructure);
 	GPIO_SetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin); // data bus: Hi
+
+	
+
 
 
 	usleep_sthr(60);
 
 
 	// odczytaj stan magistrali
-
     result= (int)GPIO_ReadInputDataBit((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin);
 
 

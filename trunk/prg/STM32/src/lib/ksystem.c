@@ -140,8 +140,9 @@ void TIM2_IRQHandler(void)
 			ktimer_spec->remain_usec-= KTIMER_INTERVAL;
 		else
 			{
+			// time elapsed
 
-			if (ktimer_spec->callback)
+			if (ktimer_spec->callback != NULL)
 				ktimer_spec->callback();
 
 			wdlist_entry->data= NULL;
@@ -167,11 +168,22 @@ void TIM2_IRQHandler(void)
 				ktimer_spec->remain_usec-= KTIMER_INTERVAL;
 			else
 				{
+				// time elapsed
 
 				if (ktimer_spec->callback)
 					ktimer_spec->callback();
 
 				ktimer_spec->remain_usec= ktimer_spec->interval_usec;
+
+				if (ktimer_spec->nrepeat > 1)
+					ktimer_spec->nrepeat-= 1;
+				else
+				if (ktimer_spec->nrepeat == 1)
+					{
+					wdlist_entry->data= NULL;
+					wdlist_delete(&ktimer_timer_list, wdlist_entry);
+					}
+                    
 				}
 
 

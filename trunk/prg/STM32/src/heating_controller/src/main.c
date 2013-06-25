@@ -117,13 +117,6 @@ int main()
 
 	ktimer_init();
 
-	timer_1.value_usec= 3000000;
-	timer_1.interval_usec= 20;
-	timer_1.callback= led_switch;
-
-	ktimer_create(&timer_1);
-
-
 
 
 	xTaskCreate( prvUSARTEchoTask, ( signed char * ) "Echo", configMINIMAL_STACK_SIZE, NULL, mainECHO_TASK_PRIORITY, NULL);
