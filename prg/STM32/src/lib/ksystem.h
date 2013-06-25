@@ -12,6 +12,7 @@ typedef struct
 	int interval_usec;
 
 	void (*callback)(void);
+	int nrepeat;	// liczba powtórzeñ, 0 - w nieskoñczonoœæ; dla interval_usec > 0
 
 
 // private
