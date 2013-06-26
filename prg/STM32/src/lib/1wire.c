@@ -60,13 +60,15 @@ const k_uchar dscrc_table[] = {
 #define GPIOC_CLK_ENABLE_BIT	(1 << 2)
 
 
-ktimer_spec_s onewire_timer;
+//ktimer_spec_s onewire_timer;
+ktimerlst_spec_s onewire_timer;
+
 k_uchar callback_phase;
 xQueueHandle owire_queue= NULL;
 
 
 
-void owire_reset_callback();
+void owire_reset_callback(ktimerlst_spec_s *ktimerlst_spec);
 void onewire_write_bit_callback(onewire_handler_s *onewire_handler);
 void onewire_read_bit_callback(onewire_handler_s *onewire_handler);
 
@@ -177,9 +179,24 @@ int onewire_bus_reset(onewire_handler_s *onewire_handler)
 
 
 	//msleep(1); // wait at least 480us
-	msleep(1000); // wait at least 480us
+	//msleep(1000); // wait at least 480us
 	
 
+	onewire_timer.callback= owire_reset_callback;
+	onewire_timer.callback_param= (void *)onewire_handler;
+	onewire_timer.value_usec[0]= 65535;
+	onewire_timer.nrepeat= 1;
+
+
+	ktimerlst_create(&onewire_timer);
+
+
+
+
+
+
+
+/*
 	// wywolaj funkcje callback
 	onewire_timer.value_usec= 0;
 	onewire_timer.interval_usec= 1000000; // 80 usec
@@ -194,15 +211,16 @@ int onewire_bus_reset(onewire_handler_s *onewire_handler)
 	ktimer_create(&onewire_timer);
 
 	xQueueReceive(owire_queue, &result, ((portTickType)5000 / portTICK_RATE_MS)); // czekam na zakoñczenie obs³ugi
-
+*/
 
 	// pin jako wyjscie
 	// wymuszenie stanu HI na magistrali
 
+/*
 	GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP; // GPIO_Mode_Out_OD
 	GPIO_Init((GPIO_TypeDef *)onewire_handler->peripheral_addr, &GPIO_InitStructure);
 	GPIO_SetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin); // data bus: Hi
-
+*/
 	msleep(1);
 
 	return result;
@@ -243,6 +261,66 @@ int onewire_bus_reset(onewire_handler_s *onewire_handler)
 
 //------------------------------------------------------------------------------
 
+
+void led_switch_x()
+	{
+	static char ledstate= 0;
+
+	if (ledstate)
+		{
+		ledstate= 0;
+		GPIO_ResetBits(GPIOB , GPIO_Pin_1);
+		}
+	else
+		{
+		ledstate= 1;
+		GPIO_SetBits(GPIOB ,  GPIO_Pin_1);
+		}
+
+	}
+
+void owire_reset_callback(ktimerlst_spec_s *ktimerlst_spec)
+	{
+	static k_uchar callback_resp;
+	static signed portBASE_TYPE xHigherPriorityTaskWoken= pdFALSE;
+	onewire_handler_s *onewire_handler= (onewire_handler_s *)ktimerlst_spec->callback_param;
+
+
+
+#if defined (__STM32__)
+	GPIO_InitTypeDef GPIO_InitStructure;
+#endif // __STM32__
+
+
+	GPIO_ResetBits(GPIOB , GPIO_Pin_1);
+
+
+	/*
+	switch (callback_phase)
+		{
+
+		case 0x00:
+			{
+
+			callback_phase= 0x01;
+			break;
+			}
+
+		case 0x01:
+			{
+			// odczytaj stan magistrali
+
+			callback_resp= GPIO_ReadInputDataBit((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin);
+			xQueueSendFromISR(owire_queue, &callback_resp, &xHigherPriorityTaskWoken);
+
+			break;
+			}
+
+		} // switch (callback_phase)
+*/
+	}
+
+/*
 void owire_reset_callback(onewire_handler_s *onewire_handler)
 	{
 	static k_uchar callback_resp;
@@ -284,10 +362,10 @@ void owire_reset_callback(onewire_handler_s *onewire_handler)
 		} // switch (callback_phase)
 
 	}
-
+*/
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-
+/*
 void onewire_write_bit(onewire_handler_s *onewire_handler, k_uchar bit)
     {
 
@@ -381,7 +459,7 @@ void onewire_write_bit_callback(onewire_handler_s *onewire_handler)
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
-k_uchar onewire_read_bit(newire_handler_s *onewire_handler)
+k_uchar onewire_read_bit(onewire_handler_s *onewire_handler)
     {
 	k_uchar result;
 
@@ -394,7 +472,7 @@ k_uchar onewire_read_bit(newire_handler_s *onewire_handler)
 #if defined (__STM32__)
 
 	if (!onewire_handler)
-		return;
+		return 0x00;
 
 	// wywolaj funkcje callback
 	onewire_timer.value_usec= 0;
@@ -538,23 +616,24 @@ void onewire_write_byte(onewire_handler_s *onewire_handler, k_uchar byte)
 
 //------------------------------------------------------------------------------
 
-void onewire_read_byte(onewire_handler_s *onewire_handler)
+k_uchar onewire_read_byte(onewire_handler_s *onewire_handler)
     {
 	k_uchar result= 0x00;
 	k_uchar recv_bit;
     k_uchar bit_cntr= 7;
 
 	if (!onewire_handler)
-		return;
+		return 0x00;
 
     do
 		{
-		recv_bit= onewire_read_bit(intf_mask);
+		recv_bit= onewire_read_bit(onewire_handler);
 		result>>= 1;
 		result|= recv_bit ? 0x80 : 0x00;
 
 		} while (bit_cntr-- != 0);
 
+    return result;
     }
 
 //------------------------------------------------------------------------------
@@ -599,3 +678,4 @@ void onewire_crc8(unsigned char *crc8, unsigned char value)
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
+*/
