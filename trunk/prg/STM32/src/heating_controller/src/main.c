@@ -70,13 +70,6 @@ void led_switch()
 	{
 	static char ledstate= 0;
 
-
-	//if (cntr++ != (25000-1))
-	//	return;
-
-	cntr= 0;
-
-
 	if (ledstate)
 		{
 		ledstate= 0;
@@ -125,7 +118,8 @@ int main()
 	serial_port_rx_timeout_set(1, 1000);
 
 
-	ktimer_init();
+	//ktimer_init();
+	ktimerlst_init();
 
 
 	timer_1.value_usec= 3000000;

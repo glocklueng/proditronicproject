@@ -40,7 +40,7 @@ int onewire_bus_reset(onewire_handler_s *onewire_handler);
 void onewire_strong_pullup_enable(onewire_handler_s *onewire_handler, k_uchar state);
 
 void onewire_write_bit(onewire_handler_s *onewire_handler, k_uchar bit);
-k_uchar onewire_read_bit(newire_handler_s *onewire_handler);
+k_uchar onewire_read_bit(onewire_handler_s *onewire_handler);
 
 void onewire_write_byte(onewire_handler_s *onewire_handler, k_uchar byte);
 k_uchar onewire_read_byte(onewire_handler_s *onewire_handler);
