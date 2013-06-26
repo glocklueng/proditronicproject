@@ -35,17 +35,18 @@ typedef struct
 //------------------------------------------------------------------------------
 
 int onewire_bus_init(onewire_handler_s *onewire_handler);
+
 int onewire_bus_reset(onewire_handler_s *onewire_handler);
+void onewire_strong_pullup_enable(onewire_handler_s *onewire_handler, k_uchar state);
 
-/*
-void onewire_write_byte(unsigned char intf_mask, unsigned char byte);
-void onewire_write_bit(unsigned char intf_mask, unsigned char bit);
+void onewire_write_bit(onewire_handler_s *onewire_handler, k_uchar bit);
+k_uchar onewire_read_bit(newire_handler_s *onewire_handler);
 
-void onewire_read_byte(unsigned char intf_mask, unsigned char *read_byte_tab);
-unsigned char onewire_read_bit(unsigned char intf_mask);
+void onewire_write_byte(onewire_handler_s *onewire_handler, k_uchar byte);
+k_uchar onewire_read_byte(onewire_handler_s *onewire_handler);
 
-void docrc8(unsigned char *crc8, unsigned char value);
-*/
+void onewire_crc8(unsigned char *crc8, unsigned char value);
+
 //------------------------------------------------------------------------------
 
 #endif /* _1WIRE_H_ */

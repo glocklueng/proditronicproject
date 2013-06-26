@@ -8,6 +8,7 @@
 
 #include <FreeRTOS.h>
 #include <task.h>
+#include <queue.h>
 
 
 #if defined (__STM32__)
@@ -33,8 +34,8 @@
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-/*
-unsigned char PROGMEM dscrc_table[] = {
+
+const k_uchar dscrc_table[] = {
         0, 94,188,226, 97, 63,221,131,194,156,126, 32,163,253, 31, 65,
       157,195, 33,127,252,162, 64, 30, 95,  1,227,189, 62, 96,130,220,
        35,125,159,193, 66, 28,254,160,225,191, 93,  3,128,222, 60, 98,
@@ -51,7 +52,7 @@ unsigned char PROGMEM dscrc_table[] = {
        87,  9,235,181, 54,104,138,212,149,203, 41,119,244,170, 72, 22,
       233,183, 85, 11,136,214, 52,106, 43,117,151,201, 74, 20,246,168,
       116, 42,200,150, 21, 75,169,247,182,232, 10, 84,215,137,107, 53};
-*/
+
 //------------------------------------------------------------------------------
 
 #define GPIOA_CLK_ENABLE_BIT	(1 << 0)
@@ -61,10 +62,13 @@ unsigned char PROGMEM dscrc_table[] = {
 
 ktimer_spec_s onewire_timer;
 k_uchar callback_phase;
+xQueueHandle owire_queue= NULL;
 
 
 
 void owire_reset_callback();
+void onewire_write_bit_callback(onewire_handler_s *onewire_handler);
+void onewire_read_bit_callback(onewire_handler_s *onewire_handler);
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -82,6 +86,10 @@ int onewire_bus_init(onewire_handler_s *onewire_handler)
 
 	if (!onewire_handler)
 		return -1;
+
+	if (!owire_queue)
+		owire_queue= xQueueCreate(1, 1);
+
 
 
 #if defined (__STM32__)
@@ -114,7 +122,7 @@ int onewire_bus_init(onewire_handler_s *onewire_handler)
 	// data bus
 	GPIO_InitStructure.GPIO_Pin= onewire_handler->data_pin;
 	GPIO_InitStructure.GPIO_Speed= GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP;
+	GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP; // GPIO_Mode_Out_OD
 	GPIO_Init((GPIO_TypeDef *)onewire_handler->peripheral_addr, &GPIO_InitStructure);
 
 	GPIO_SetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin); // data bus: Hi
@@ -125,7 +133,7 @@ int onewire_bus_init(onewire_handler_s *onewire_handler)
 		{
 		GPIO_InitStructure.GPIO_Pin= onewire_handler->strong_pull_up_pin;
 		GPIO_InitStructure.GPIO_Speed= GPIO_Speed_50MHz;
-		GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP;
+		GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP; // GPIO_Mode_Out_OD ????
 		GPIO_Init((GPIO_TypeDef *)onewire_handler->peripheral_addr, &GPIO_InitStructure);
 
         GPIO_ResetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->strong_pull_up_pin); // strong pull-up OFF
@@ -141,10 +149,11 @@ int onewire_bus_init(onewire_handler_s *onewire_handler)
 	}
 
 //------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 int onewire_bus_reset(onewire_handler_s *onewire_handler)
     {
-    int result;
+    k_uchar result;
 
 #if defined (__STM32__)
 	GPIO_InitTypeDef GPIO_InitStructure;
@@ -162,7 +171,7 @@ int onewire_bus_reset(onewire_handler_s *onewire_handler)
 	
 	GPIO_InitStructure.GPIO_Pin= onewire_handler->data_pin;
 	GPIO_InitStructure.GPIO_Speed= GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP;
+	GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP; // GPIO_Mode_Out_OD
 	GPIO_Init((GPIO_TypeDef *)onewire_handler->peripheral_addr, &GPIO_InitStructure);
 	GPIO_ResetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin); // data bus: Lo
 
@@ -178,38 +187,25 @@ int onewire_bus_reset(onewire_handler_s *onewire_handler)
 	onewire_timer.callback_param= (void *)onewire_handler;
 	onewire_timer.nrepeat= 2;
 
+
+	xQueueReset(owire_queue);
+
 	callback_phase= 0x00;
 	ktimer_create(&onewire_timer);
 
+	xQueueReceive(owire_queue, &result, ((portTickType)5000 / portTICK_RATE_MS)); // czekam na zakoñczenie obs³ugi
 
 
-	// wait na zakonczenie !!!
+	// pin jako wyjscie
+	// wymuszenie stanu HI na magistrali
 
-	msleep(5000);
-
-
-	GPIO_InitStructure.GPIO_Pin= onewire_handler->data_pin;
-	GPIO_InitStructure.GPIO_Speed= GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP;
+	GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP; // GPIO_Mode_Out_OD
 	GPIO_Init((GPIO_TypeDef *)onewire_handler->peripheral_addr, &GPIO_InitStructure);
-
 	GPIO_SetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin); // data bus: Hi
 
+	msleep(1);
 
-
-/*
-*/
-	
-
-
-
-
-
-	// odczytaj stan magistrali
-    //result= (int)GPIO_ReadInputDataBit((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin);
-
-
-	return 0;
+	return result;
 
 #else
 
@@ -249,6 +245,8 @@ int onewire_bus_reset(onewire_handler_s *onewire_handler)
 
 void owire_reset_callback(onewire_handler_s *onewire_handler)
 	{
+	static k_uchar callback_resp;
+	static signed portBASE_TYPE xHigherPriorityTaskWoken= pdFALSE;
 
 #if defined (__STM32__)
 	GPIO_InitTypeDef GPIO_InitStructure;
@@ -270,7 +268,6 @@ void owire_reset_callback(onewire_handler_s *onewire_handler)
 			GPIO_SetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin); // data bus: Hi
 
 			callback_phase= 0x01;
-
 			break;
 			}
 
@@ -278,62 +275,44 @@ void owire_reset_callback(onewire_handler_s *onewire_handler)
 			{
 			// odczytaj stan magistrali
 
-
+			callback_resp= GPIO_ReadInputDataBit((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin);
+			xQueueSendFromISR(owire_queue, &callback_resp, &xHigherPriorityTaskWoken);
 
 			break;
 			}
-
 
 		} // switch (callback_phase)
 
 	}
 
 //------------------------------------------------------------------------------
-
-
-/*
-void onewire_write_byte(unsigned char intf_mask, unsigned char byte)
-    {
-    unsigned char bit_cntr= 7;
-
-    do
-		{
-		onewire_write_bit(intf_mask, byte & 0x01);
-		byte>>= 1;
-		} while (bit_cntr-- != 0);
-    }
-
 //------------------------------------------------------------------------------
 
-void onewire_read_byte(unsigned char intf_mask, unsigned char *read_byte_tab)
+void onewire_write_bit(onewire_handler_s *onewire_handler, k_uchar bit)
     {
-    unsigned char bit_cntr= 7;
 
-    do
-		{
-		unsigned char x= 0;
-		unsigned char recv_bits= onewire_read_bit(intf_mask);
+#if defined (__STM32__)
 
-		for (unsigned char bit_mask=0x01;bit_mask!=0x00;bit_mask<<=1)
-			{
-			if (bit_mask & intf_mask)
-				{
-				read_byte_tab[x]>>= 1;
-				if (recv_bits & bit_mask)
-					read_byte_tab[x]|= 0x80;
-				x++;
-				}
-			}
+	if (!onewire_handler)
+		return;
 
-		} while (bit_cntr-- != 0);
+	// wywolaj funkcje callback
+	onewire_timer.value_usec= 0;
+	onewire_timer.interval_usec= (bit == 0x01) ? 10 : 80; // usec
+	onewire_timer.callback= onewire_write_bit_callback;
+	onewire_timer.callback_param= (void *)onewire_handler;
+	onewire_timer.nrepeat= 2;
 
-    }
+	callback_phase= 0x00;
+	ktimer_create(&onewire_timer);
 
-//------------------------------------------------------------------------------
+	msleep(1);
 
-void onewire_write_bit(unsigned char intf_mask, unsigned char bit)
-    {
-    taskENTER_CRITICAL();
+	return;
+
+#else
+
+	taskENTER_CRITICAL();
 
     // pin jako wyjscie
     // wymuszenie stanu LO na magistrali
@@ -359,12 +338,96 @@ void onewire_write_bit(unsigned char intf_mask, unsigned char bit)
     else
 		_delay_us(5);
 
+#endif
+
     }
 
 //------------------------------------------------------------------------------
 
-unsigned char onewire_read_bit(unsigned char intf_mask)
+void onewire_write_bit_callback(onewire_handler_s *onewire_handler)
+	{
+
+#if defined (__STM32__)
+	GPIO_InitTypeDef GPIO_InitStructure;
+#endif // __STM32__
+
+
+	switch (callback_phase)
+		{
+
+		case 0x00:
+			{
+			// wymuszenie stanu Lo na magistrali
+			// pin jako wyjscie
+
+			GPIO_ResetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin); // data bus: Lo
+
+			callback_phase= 0x01;
+			break;
+			}
+
+		case 0x01:
+			{
+
+			GPIO_SetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin); // data bus: Hi
+
+			break;
+			}
+
+		} // switch (callback_phase)
+
+	}
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
+k_uchar onewire_read_bit(newire_handler_s *onewire_handler)
     {
+	k_uchar result;
+
+#if defined (__STM32__)
+	GPIO_InitTypeDef GPIO_InitStructure;
+#endif // __STM32__
+
+
+
+#if defined (__STM32__)
+
+	if (!onewire_handler)
+		return;
+
+	// wywolaj funkcje callback
+	onewire_timer.value_usec= 0;
+	onewire_timer.interval_usec= 5; // usec
+	onewire_timer.callback= onewire_read_bit_callback;
+	onewire_timer.callback_param= (void *)onewire_handler;
+	onewire_timer.nrepeat= 3;
+
+
+	xQueueReset(owire_queue);
+
+	callback_phase= 0x00;
+	ktimer_create(&onewire_timer);
+
+	xQueueReceive(owire_queue, &result, ((portTickType)1000 / portTICK_RATE_MS)); // czekam na zakoñczenie obs³ugi
+
+
+	// pin jako wyjscie
+	// wymuszenie stanu HI na magistrali
+
+	GPIO_InitStructure.GPIO_Pin= onewire_handler->data_pin;
+	GPIO_InitStructure.GPIO_Speed= GPIO_Speed_50MHz;
+	GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP; // GPIO_Mode_Out_OD
+	GPIO_Init((GPIO_TypeDef *)onewire_handler->peripheral_addr, &GPIO_InitStructure);
+	GPIO_SetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin); // data bus: Hi
+
+	msleep(1);
+
+	return result;
+
+
+#else
+
     unsigned char result;
 
     taskENTER_CRITICAL();
@@ -394,18 +457,145 @@ unsigned char onewire_read_bit(unsigned char intf_mask)
     _delay_us(15);
 
     return result;
+
+#endif
+
     }
 
 //------------------------------------------------------------------------------
 
-void docrc8(unsigned char *crc8, unsigned char value)
+void onewire_read_bit_callback(onewire_handler_s *onewire_handler)
+	{
+	static k_uchar callback_resp;
+	static signed portBASE_TYPE xHigherPriorityTaskWoken= pdFALSE;
+
+#if defined (__STM32__)
+	GPIO_InitTypeDef GPIO_InitStructure;
+#endif // __STM32__
+
+
+	switch (callback_phase)
+		{
+
+		case 0x00:
+			{
+			// wymuszenie stanu Lo na magistrali
+			// pin jako wyjscie
+
+			GPIO_ResetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin); // data bus: Lo
+
+			callback_phase= 0x01;
+			break;
+			}
+
+		case 0x01:
+			{
+			// wymuszenie stanu HI na magistrali
+			// pin jako wejscie
+
+			GPIO_InitStructure.GPIO_Pin= onewire_handler->data_pin;
+			GPIO_InitStructure.GPIO_Speed= GPIO_Speed_50MHz;
+			GPIO_InitStructure.GPIO_Mode= GPIO_Mode_IPU;
+			GPIO_Init((GPIO_TypeDef *)onewire_handler->peripheral_addr, &GPIO_InitStructure);
+			GPIO_SetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin); // data bus: Hi
+
+			callback_phase= 0x02;
+			break;
+			}
+
+		case 0x02:
+			{
+			// odczytaj stan magistrali
+
+			callback_resp= GPIO_ReadInputDataBit((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin);
+			xQueueSendFromISR(owire_queue, &callback_resp, &xHigherPriorityTaskWoken);
+
+			break;
+			}
+
+
+		} // switch (callback_phase)
+
+	}
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
+void onewire_write_byte(onewire_handler_s *onewire_handler, k_uchar byte)
     {
-    const prog_char *ptr= &dscrc_table[*crc8 ^ value];
-    *crc8= pgm_read_byte(ptr);
+    unsigned char bit_cntr= 7;
+
+	if (!onewire_handler)
+		return;
+
+    do
+		{
+		onewire_write_bit(onewire_handler, byte & 0x01);
+		byte>>= 1;
+		} while (bit_cntr-- != 0);
+
     }
-*/
+
+//------------------------------------------------------------------------------
+
+void onewire_read_byte(onewire_handler_s *onewire_handler)
+    {
+	k_uchar result= 0x00;
+	k_uchar recv_bit;
+    k_uchar bit_cntr= 7;
+
+	if (!onewire_handler)
+		return;
+
+    do
+		{
+		recv_bit= onewire_read_bit(intf_mask);
+		result>>= 1;
+		result|= recv_bit ? 0x80 : 0x00;
+
+		} while (bit_cntr-- != 0);
+
+    }
+
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
+
+void onewire_strong_pullup_enable(onewire_handler_s *onewire_handler, k_uchar state)
+	{
+
+	if (!onewire_handler)
+		return;
+
+	if (!onewire_handler->strong_pull_up_enable)
+		return;
+
+
+#if defined (__STM32__)
+
+	if (state)
+		{
+		// strong pullup: enable
+		GPIO_SetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->strong_pull_up_pin); // strong pull-up OFF
+		}
+	else
+		{
+		// strong pullup: disable
+		GPIO_ResetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->strong_pull_up_pin); // strong pull-up OFF
+		}
+
+#endif // __STM32__
+
+
+	}
+
+//------------------------------------------------------------------------------
+
+void onewire_crc8(unsigned char *crc8, unsigned char value)
+    {
+    const k_uchar *ptr= &dscrc_table[*crc8 ^ value];
+    *crc8= *ptr;
+    }
+
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
