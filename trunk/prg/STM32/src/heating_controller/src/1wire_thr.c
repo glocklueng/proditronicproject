@@ -31,14 +31,7 @@ void prvOneWireTask(void *pvParameters)
 
 	onewire_handler_s onewire_chn1;
 
-
-
-
-/*
-*/
-
 	msleep(1000);
-
 
 
 	onewire_chn1.peripheral_addr= (uint32_t)GPIOB;
@@ -46,18 +39,25 @@ void prvOneWireTask(void *pvParameters)
 	onewire_chn1.strong_pull_up_enable= 0x00;
 	onewire_bus_init(&onewire_chn1);
 
+	msleep(3000);
+
 
 	while (1)
 		{
 
-		msleep(1000);
 
-		onewire_bus_reset(&onewire_chn1);
+		//msleep(3000);
+
+		//onewire_bus_reset(&onewire_chn1);
+
+		msleep(2000);
+		onewire_write_bit(&onewire_chn1, 0x00);
+
+		//msleep(2000);
+		//onewire_write_bit(&onewire_chn1, 0x01);
 
 
 
-
-		break;
 
 		} // while (1)
 
