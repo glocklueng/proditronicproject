@@ -22,6 +22,14 @@
 
 #define ONEWIRE_DEV_ID_LENGTH	8
 
+#define ONEWIRE_PULSE_WIDTH_RESET_LO			(int)50000
+#define ONEWIRE_PULSE_WIDTH_RESET_HI			(int)800
+#define ONEWIRE_PULSE_WIDTH_WR_TIMESLOT			(int)7000
+#define ONEWIRE_PULSE_WIDTH_WR1_LO				(int)500
+#define ONEWIRE_PULSE_WIDTH_WR0_LO				(int)6500
+#define ONEWIRE_PULSE_WIDTH_RD_LO				(int)5000
+#define ONEWIRE_PULSE_WIDTH_RD_HI				(int)1000
+
 //------------------------------------------------------------------------------
 
 
