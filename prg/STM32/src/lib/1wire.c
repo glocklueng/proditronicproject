@@ -184,8 +184,8 @@ k_uchar onewire_bus_reset(onewire_handler_s *onewire_handler)
 	onewire_timer.callback= owire_reset_callback;
 	onewire_timer.callback_param= (void *)onewire_handler;
 	onewire_timer.value_usec[0]= 0;		// output, Lo
-	onewire_timer.value_usec[1]= 50000; // 480us //  input, Hi
-	onewire_timer.value_usec[2]= 10000; // 80us, input, Hi, read
+	onewire_timer.value_usec[1]= ONEWIRE_PULSE_WIDTH_RESET_LO;	// 480us //  input, Hi
+	onewire_timer.value_usec[2]= ONEWIRE_PULSE_WIDTH_RESET_HI;	// 80us, input, Hi, read
 	onewire_timer.nrepeat= 3;
 
 	ktimerlst_create(&onewire_timer);
@@ -325,8 +325,18 @@ void onewire_write_bit(onewire_handler_s *onewire_handler, k_uchar bit)
 	onewire_timer.callback= onewire_write_bit_callback;
 	onewire_timer.callback_param= (void *)onewire_handler;
 	onewire_timer.value_usec[0]= 0;
-	onewire_timer.value_usec[1]= 50000; // bit ?
-	onewire_timer.value_usec[2]= 10000;
+
+	if (bit)
+		{
+		onewire_timer.value_usec[1]= ONEWIRE_PULSE_WIDTH_WR1_LO;
+		onewire_timer.value_usec[2]= ONEWIRE_PULSE_WIDTH_WR_TIMESLOT - ONEWIRE_PULSE_WIDTH_WR1_LO;
+		}
+	else
+		{
+		onewire_timer.value_usec[1]= ONEWIRE_PULSE_WIDTH_WR0_LO;
+		onewire_timer.value_usec[2]= ONEWIRE_PULSE_WIDTH_WR_TIMESLOT - ONEWIRE_PULSE_WIDTH_WR0_LO;
+		}
+
 	onewire_timer.nrepeat= 3;
 
 	ktimerlst_create(&onewire_timer);
@@ -425,8 +435,18 @@ void onewire_write_bit_pullup(onewire_handler_s *onewire_handler, k_uchar bit)
 	onewire_timer.callback= onewire_write_bit_callback_pullup;
 	onewire_timer.callback_param= (void *)onewire_handler;
 	onewire_timer.value_usec[0]= 0;
-	onewire_timer.value_usec[1]= 50000; // bit ?
-	onewire_timer.value_usec[2]= 10000;
+
+	if (bit)
+		{
+		onewire_timer.value_usec[1]= ONEWIRE_PULSE_WIDTH_WR1_LO;
+		onewire_timer.value_usec[2]= ONEWIRE_PULSE_WIDTH_WR_TIMESLOT - ONEWIRE_PULSE_WIDTH_WR1_LO;
+		}
+	else
+		{
+		onewire_timer.value_usec[1]= ONEWIRE_PULSE_WIDTH_WR0_LO;
+		onewire_timer.value_usec[2]= ONEWIRE_PULSE_WIDTH_WR_TIMESLOT - ONEWIRE_PULSE_WIDTH_WR0_LO;
+		}
+
 	onewire_timer.nrepeat= 3;
 
 	ktimerlst_create(&onewire_timer);
@@ -496,7 +516,7 @@ k_uchar onewire_read_bit(onewire_handler_s *onewire_handler)
 #endif // __STM32__
 
 	if (!onewire_handler)
-		return;
+		return 0;
 
 
 #if defined (__STM32__)
@@ -506,8 +526,10 @@ k_uchar onewire_read_bit(onewire_handler_s *onewire_handler)
 	onewire_timer.callback= onewire_read_bit_callback;
 	onewire_timer.callback_param= (void *)onewire_handler;
 	onewire_timer.value_usec[0]= 0;
-	onewire_timer.value_usec[1]= 65000;
-	onewire_timer.value_usec[2]= 65000;
+
+	onewire_timer.value_usec[1]= ONEWIRE_PULSE_WIDTH_RD_LO;
+	onewire_timer.value_usec[2]= ONEWIRE_PULSE_WIDTH_RD_HI;
+
 	onewire_timer.nrepeat= 3;
 
 	ktimerlst_create(&onewire_timer);
@@ -519,6 +541,11 @@ k_uchar onewire_read_bit(onewire_handler_s *onewire_handler)
 
 	// pin jako wyjscie
 	// wymuszenie stanu HI na magistrali
+
+
+
+	GPIO_InitStructure.GPIO_Pin= onewire_handler->data_pin;
+	GPIO_InitStructure.GPIO_Speed= GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP; // GPIO_Mode_Out_OD
 	GPIO_Init((GPIO_TypeDef *)onewire_handler->peripheral_addr, &GPIO_InitStructure);
 	GPIO_SetBits((GPIO_TypeDef *)onewire_handler->peripheral_addr, onewire_handler->data_pin); // data bus: Hi

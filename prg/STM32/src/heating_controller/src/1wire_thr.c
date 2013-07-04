@@ -5,7 +5,11 @@
  *      Author: Tomek
  */
 
+#include <stdlib.h>
+#include <string.h>
 
+
+#include <FreeRTOS.h>
 #include "task.h"
 
 
@@ -25,8 +29,6 @@
 
 //-----------------------------------------------------------------------------
 
-thermometer_s thermometer_tab[4];
-int nthermometers= 1;
 
 wdlist_s thermometer_list;
 
@@ -60,7 +62,10 @@ void prvOneWireTask(void *pvParameters)
 
 
 	therm_new= (thermometer_s *)malloc(sizeof(thermometer_s));
+
 	therm_new->onewire_handler= &onewire_chn1;
+	memset(therm_new->dev_id, 0x55, 8);
+
     wdlist_append(&thermometer_list, (void *)therm_new);
 
 
@@ -93,19 +98,19 @@ void prvOneWireTask(void *pvParameters)
 		//---
 
 
-		owire_resp= therm_ds18b20_conversion_start(therm_curr->onewire_handler, therm_entry->dev_id);
+		owire_resp= therm_ds18b20_conversion_start(therm_curr->onewire_handler, therm_curr->dev_id);
 
-		if (owire_resp != 0x00)
-			goto prvOneWireTask_next;
+//		if (owire_resp != 0x00)
+//			goto prvOneWireTask_next;
 
 		msleep(800); // Tconv, max. 750 ms
 
 		if (therm_curr->onewire_handler->strong_pull_up_enable)
 			onewire_strong_pullup_enable(therm_curr->onewire_handler, 0x00); // strong pull-up OFF
 
-		owire_resp= therm_ds18b20_temperature_read(therm_curr->onewire_handler, therm_entry->dev_id, &temp_read);
+		owire_resp= therm_ds18b20_temperature_read(therm_curr->onewire_handler, therm_curr->dev_id, &temp_read);
 
-		if (owire_resp == 0x00)
+	//	if (owire_resp == 0x00)
 			{
 
 
@@ -119,7 +124,8 @@ prvOneWireTask_next:
 		therm_entry= therm_entry->next;
 
 		if (therm_entry == NULL)
-			vTaskDelayUntil(&xLastWakeTime, (THERMOMETER_READ_PERIOD * 1000 / portTICK_RATE_MS));
+			msleep(5000);
+			//vTaskDelayUntil(&xLastWakeTime, (THERMOMETER_READ_PERIOD * 1000 / portTICK_RATE_MS));
 
 		} // while (1)
 

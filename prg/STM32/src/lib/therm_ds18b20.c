@@ -5,6 +5,8 @@
  *      Author: przybysz.tomasz@gmail.com
  *
 /------------------------------------------------------------------------------*/
+
+#include <stdlib.h>
 #include <string.h>
 
 #include "therm_ds18b20.h"
@@ -22,8 +24,8 @@ k_uchar therm_ds18b20_conversion_start(onewire_handler_s *onewire_handler, k_uch
 
 	result= onewire_bus_reset(onewire_handler);
 
-	if (result != 0x00)
-		return (k_uchar)-1;
+//	if (result != 0x00)
+//		return (k_uchar)-1;
 
 
 	if (dev_id == NULL)
@@ -58,8 +60,8 @@ k_uchar therm_ds18b20_temperature_read(onewire_handler_s *onewire_handler, k_uch
 
 	result= onewire_bus_reset(onewire_handler);
 
-	if (result != 0x00)
-		return (k_uchar)-1;
+//	if (result != 0x00)
+//		return (k_uchar)-1;
 
 
 	if (dev_id == NULL)
@@ -74,28 +76,15 @@ k_uchar therm_ds18b20_temperature_read(onewire_handler_s *onewire_handler, k_uch
 
 	onewire_write_byte(onewire_handler, ONE_WIRE_CMD_READ_SCRATCHPAD);	// 0xBE
 
+
 	for (x=0;x<9;x++)
 		{
 
 		result= onewire_read_byte(onewire_handler);
 		onewire_crc8(&crc8, result);
 
-		switch (x)
-			{
-
-			case 0:
-				{
-				*((unsigned char *)&temp[x])= result;
-				break;
-				}
-
-			case 1:
-				{
-				*(((unsigned char *)&temp[x]) + 1)= result;
-				break;
-				}
-
-			} // switch (bit_mask)
+		if (x < 2)
+			*((k_uchar *)temp + x)= result;
 
 		} // for
 
