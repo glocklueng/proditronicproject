@@ -17,19 +17,27 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
+#include "semphr.h"
 
 #include "FreeRTOSConfig.h"
 
 #include "serial_port.h"
 #include "ksystem.h"
+#include "wdlist.h"
 
 
+#include "global.h"
+
+#include "1wire.h"
 #include "1wire_thr.h"
+
+#include "tempctrlpid_thr.h"
 
 
 
 #define mainECHO_TASK_PRIORITY					( tskIDLE_PRIORITY + 1 )
 #define mainONEWIRE_TASK_PRIORITY				( tskIDLE_PRIORITY + 1 )
+#define mainTEMPCTRLPID_TASK_PRIORITY			( tskIDLE_PRIORITY + 1 )
 
 //using namespace std;
 
@@ -48,7 +56,18 @@ static void prvUSARTEchoTask(void *pvParameters);
 
 #define mainBLOCK_Q_PRIORITY				( tskIDLE_PRIORITY + 2 )
 
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
+// globalne
+
+onewire_handler_s onewire_chnlst[ONEWIRE_NBUS];
+
+wdlist_s thermometer_list;
+xSemaphoreHandle thermometer_sem;
+
+wdlist_s heater_list;
+xQueueHandle temp_pid_queue;
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -91,6 +110,9 @@ int main()
 
 	USART_InitTypeDef USART_InitStructure;
 
+	thermometer_s *therm_new;
+	heater_s *heater_new;
+
 
 
 	// zatanowic sie czy dla 1-wire wyjscie PP czy OC !!!
@@ -114,34 +136,58 @@ int main()
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;
 	USART_InitStructure.USART_Parity = USART_Parity_No;
 
-	serial_port_init(1, &USART_InitStructure); // console
+	serial_port_init(1, &USART_InitStructure); // console init
 	serial_port_rx_timeout_set(1, 1000);
 
-
-	//ktimer_init();
 	ktimerlst_init();
 
 
-	timer_1.value_usec= 3000000;
-	timer_1.interval_usec= 1000000;
-	timer_1.callback= led_switch;
-	timer_1.nrepeat= 0;
 
-	//ktimer_create(&timer_1);
+	vSemaphoreCreateBinary(thermometer_sem);
+	wdlist_init(&thermometer_list);
+
+	wdlist_init(&heater_list);
+
+	temp_pid_queue= xQueueCreate(1, 1);
+
+
+// odczyt konfiguracji
+
+
+	// termometry
+
+	therm_new= (thermometer_s *)malloc(sizeof(thermometer_s));
+	therm_new->onewire_handler= &onewire_chnlst[0];
+	therm_new->temp_vaild= false;
+	therm_new->temp_read_error_cntr= 0;
+	memset(therm_new->dev_id, 0x55, 8);
+	wdlist_append(&thermometer_list, (void *)therm_new);
+
+	
+	// grzejniki
+
+	heater_new= (heater_s *)malloc(sizeof(heater_s));
+	heater_new->thermometer= therm_new;
+	heater_new->temp_zadana= 21000; // 21,0
+	heater_new->temp_offset= 0;
+	wdlist_append(&heater_list, (void *)heater_new);
+
+
+
+
 
 
 
 
 	xTaskCreate(prvUSARTEchoTask, (signed char *)"Echo", configMINIMAL_STACK_SIZE, NULL, mainECHO_TASK_PRIORITY, NULL);
 	xTaskCreate(prvOneWireTask, (signed char *)"1Wire", configMINIMAL_STACK_SIZE, NULL, mainONEWIRE_TASK_PRIORITY, NULL);
+	xTaskCreate(prvTempCtrlPIDTask, (signed char *)"PID", configMINIMAL_STACK_SIZE, NULL, mainTEMPCTRLPID_TASK_PRIORITY, NULL);
 
 
 
 	vTaskStartScheduler();
 
 
-	while (1)
-		;
 
 	return 0;
 	}

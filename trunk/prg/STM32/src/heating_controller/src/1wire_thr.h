@@ -16,7 +16,8 @@
 
 //-----------------------------------------------------------------------------
 
-#define THERMOMETER_READ_PERIOD		10 // sec
+#define THERMOMETER_READ_PERIOD			10 // sec
+#define THERMOMETER_READ_ERROR_MAX		3
 
 //-----------------------------------------------------------------------------
 
@@ -25,7 +26,9 @@ typedef struct
 	onewire_handler_s *onewire_handler;
 	k_uchar dev_id[ONEWIRE_DEV_ID_LENGTH];
 	
-
+	k_ushort temp_value;
+	bool temp_vaild;
+	k_uchar temp_read_error_cntr;
 
 
 	} thermometer_s;
