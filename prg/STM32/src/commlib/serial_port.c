@@ -29,6 +29,7 @@ typedef struct
 	{
 	xSemaphoreHandle usart_tx_int_sem;
 	xSemaphoreHandle usart_rx_int_sem;
+	xSemaphoreHandle usart_tx_usr_sem;
 	xSemaphoreHandle usart_rx_usr_sem;
 
 	unsigned char *usart_rx_buffer;
@@ -69,6 +70,8 @@ int serial_port_init(unsigned char port_no, USART_InitTypeDef *USART_InitStructu
 
 			vSemaphoreCreateBinary(usart1_def.usart_rx_int_sem);
 			xSemaphoreTake(usart1_def.usart_rx_int_sem, 0);
+
+			vSemaphoreCreateBinary(usart1_def.usart_tx_usr_sem);
 
 			vSemaphoreCreateBinary(usart1_def.usart_rx_usr_sem);
 			xSemaphoreTake(usart1_def.usart_rx_usr_sem, 0);
@@ -135,6 +138,8 @@ int serial_port_write(unsigned char port_no, char *ptr, int len)
 		case 1: // USART1
 			{
 
+			xSemaphoreTake(usart1_def.usart_tx_usr_sem, 0);
+
 			while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET)
 				vTaskDelay(tx_ready_try_ms);
 
@@ -166,7 +171,8 @@ int serial_port_write(unsigned char port_no, char *ptr, int len)
 			else
 				result= -1; // timeout
 
-			result= len;
+			xSemaphoreGive(usart1_def.usart_tx_usr_sem);
+
 			break;
 			} // USART1
 
