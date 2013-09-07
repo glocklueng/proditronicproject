@@ -20,7 +20,7 @@
 
 //------------------------------------------------------------------------------
 
-#define ONEWIRE_DEV_ID_LENGTH	8
+#define ONEWIRE_DEV_ID_LENGTH					6
 
 #define ONEWIRE_PULSE_WIDTH_RESET_LO			(int)480
 #define ONEWIRE_PULSE_WIDTH_RESET_HI			(int)80
