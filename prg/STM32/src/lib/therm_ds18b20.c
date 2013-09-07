@@ -17,6 +17,7 @@ k_uchar therm_ds18b20_conversion_start(onewire_handler_s *onewire_handler, k_uch
     {
 	k_uchar result;
 	int x;
+	k_uchar crc8;
 
 	if (!onewire_handler)
 		return (k_uchar)-1;
@@ -30,10 +31,20 @@ k_uchar therm_ds18b20_conversion_start(onewire_handler_s *onewire_handler, k_uch
 		onewire_write_byte(onewire_handler, ONE_WIRE_CMD_SKIP_ROM);				// 0xCC
 	else
 		{
+		crc8= 0x00;
+
 		onewire_write_byte(onewire_handler, ONE_WIRE_CMD_MATCH_ROM);			// 0x55
 
+		onewire_write_byte(onewire_handler, DS18B20_FAMILY_CODE);				// 0x28
+		onewire_crc8(&crc8, DS18B20_FAMILY_CODE);
+
 		for (x=0;x<ONEWIRE_DEV_ID_LENGTH;x++)
-			onewire_write_byte(onewire_handler, dev_id[x]); 					// dev_id
+			{
+			onewire_write_byte(onewire_handler, dev_id[5-x]); 					// dev_id
+			onewire_crc8(&crc8, dev_id[5-x]);
+			}
+
+		onewire_write_byte(onewire_handler, crc8);
 		}
 
 	if (onewire_handler->strong_pull_up_enable)
@@ -50,7 +61,7 @@ k_uchar therm_ds18b20_temperature_read(onewire_handler_s *onewire_handler, k_uch
 	{
 	k_uchar result;
 	int x;
-	k_uchar crc8= 0x00;
+	k_uchar crc8;
 	k_uchar correct= 0x01;
 
 	if (!onewire_handler || !temp)
@@ -65,11 +76,23 @@ k_uchar therm_ds18b20_temperature_read(onewire_handler_s *onewire_handler, k_uch
 		onewire_write_byte(onewire_handler, ONE_WIRE_CMD_SKIP_ROM);		// 0xCC
 	else
 		{
+		crc8= 0x00;
+
 		onewire_write_byte(onewire_handler, ONE_WIRE_CMD_MATCH_ROM);	// 0x55
 
+		onewire_write_byte(onewire_handler, DS18B20_FAMILY_CODE);		// 0x28
+		onewire_crc8(&crc8, DS18B20_FAMILY_CODE);
+
 		for (x=0;x<ONEWIRE_DEV_ID_LENGTH;x++)
-			onewire_write_byte(onewire_handler, dev_id[x]); 			// dev_id
+			{
+			onewire_write_byte(onewire_handler, dev_id[5-x]); 			// dev_id
+			onewire_crc8(&crc8, dev_id[5-x]);
+			}
+
+		onewire_write_byte(onewire_handler, crc8);
 		}
+
+	crc8= 0x00;
 
 	onewire_write_byte(onewire_handler, ONE_WIRE_CMD_READ_SCRATCHPAD);	// 0xBE
 
@@ -120,7 +143,7 @@ k_uchar therm_ds18b20_id_read(onewire_handler_s *onewire_handler, k_uchar *dev_i
 			therm_family= 0x01;
 		else
 		if ((x > 0) && (x < 7))
-			dev_id[x-1]= result;
+			dev_id[6-x]= result;
 		}
 
 	return ((crc8 == 0x00) && therm_family) ? 0x00 : (k_uchar)-1;
