@@ -110,6 +110,19 @@ int onewire_bus_init(onewire_handler_s *onewire_handler)
 			break;
 			} // GPIOB
 
+		case (uint32_t)GPIOC:
+			{
+
+			if (!(GPIOx_clk_enable & GPIOC_CLK_ENABLE_BIT))
+				{
+				// only once
+                RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
+				GPIOx_clk_enable|= GPIOC_CLK_ENABLE_BIT;
+				}
+
+			break;
+			} // GPIOC
+
 		case (uint32_t)GPIOD:
 			{
 

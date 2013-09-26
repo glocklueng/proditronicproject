@@ -28,7 +28,7 @@
 //------------------------------------------------------------------------------
 
 k_uchar therm_ds18b20_conversion_start(onewire_handler_s *onewire_handler, k_uchar *dev_id);
-k_uchar therm_ds18b20_temperature_read(onewire_handler_s *onewire_handler, k_uchar *dev_id, k_ushort *temp);
+k_uchar therm_ds18b20_temperature_read(onewire_handler_s *onewire_handler, k_uchar *dev_id, k_short *temp);
 k_uchar therm_ds18b20_id_read(onewire_handler_s *onewire_handler, k_uchar *dev_id);
 
 //------------------------------------------------------------------------------

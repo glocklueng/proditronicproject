@@ -203,7 +203,7 @@ void ktimerlst_init()
 
 // ustaw timer
 
-	PrescalerValue= (uint16_t)(SystemCoreClock / 100000) - 1; // 1MHz
+	PrescalerValue= (uint16_t)(SystemCoreClock / 1000000) - 1; // 1MHz
 
 	// TIM2 configuration
 	TIM_TimeBaseStructure_ktimerlst.TIM_Period= 65000; // nie ma znaczenia, ustawiane w ktimerlst_create
@@ -281,33 +281,17 @@ void ktimerlst_create(ktimerlst_spec_s *ktimerlst_spec)
 void TIM2_IRQHandler(void)
 	{
 
-	TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
-
+	TIM2->SR= (uint16_t)~TIM_IT_Update;
 
 	ktimerlst_spec_ptr->callback(ktimerlst_spec_ptr);
 	ktimerlst_spec_ptr->phase++;
 
-
 	if (ktimerlst_spec_ptr->phase < ktimerlst_spec_ptr->nrepeat)
 		{
-
-		TIM_ITConfig(TIM2, TIM_IT_Update, DISABLE); // !!!
-
-		// TIM2 configuration
-		TIM_TimeBaseStructure_ktimerlst.TIM_Period= ktimerlst_spec_ptr->value_usec[ktimerlst_spec_ptr->phase];
-		TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure_ktimerlst);
-
-		// Clear TIM2, TIM3 and TIM4 update pending flags
-		TIM_ClearFlag(TIM2, TIM_FLAG_Update);
-
-		// Enable TIM2, TIM3 and TIM4 Update interrupts
-		TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE); // !!!
-
-		// TIM2, TIM3 and TIM4 enable counters
-		TIM_Cmd(TIM2, ENABLE);
-
+		TIM2->ARR= ktimerlst_spec_ptr->value_usec[ktimerlst_spec_ptr->phase];
+		TIM2->SR= (uint16_t)~TIM_FLAG_Update;
+		TIM2->CR1|= TIM_CR1_CEN;
 		}
-
 
 	}
 

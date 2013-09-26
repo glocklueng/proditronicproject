@@ -25,6 +25,7 @@ typedef struct
 
 typedef struct
 	{
+	k_uchar indx;
 
 	thermometer_s *thermometer;
 

@@ -5,6 +5,7 @@
 #include <FreeRTOS.h>
 #include "task.h"
 #include "semphr.h"
+#include "queue.h"
 
 
 #include "wdlist.h"
@@ -21,7 +22,7 @@ const k_long Kd= 10000;			// 10,000
 
 // nastawy min, max
 const k_long reg_min= 0; 		// 0,000
-const k_long reg_max= 10000		// 10,000
+const k_long reg_max= 10000;	// 10,000
 
 
 
@@ -32,6 +33,7 @@ extern wdlist_s thermometer_list;
 extern xSemaphoreHandle thermometer_sem;
 
 extern wdlist_s heater_list;
+extern xQueueHandle temp_pid_queue;
 
 
 //-----------------------------------------------------------------------------
@@ -68,7 +70,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 
 
 	queue_dta= 0x01; // init
-	xQueueSend(temp_pid_queue, &queue_dta);
+	xQueueSend(temp_pid_queue, &queue_dta, (portTickType)0);
 
 
 	while (1)
@@ -116,7 +118,10 @@ void prvTempCtrlPIDTask(void *pvParameters)
 						heater->PID_data.uchyb_prev= temp_uchyb;
 
 
+
 					ctrl_param= temp_pid_process(&heater->PID_data, temp_uchyb);
+
+					printf("%06d  %06d  %06d  %06d\n", heater->temp_zadana, heater_temp, temp_uchyb, ctrl_param);
 
 
 					}
