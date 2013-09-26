@@ -33,7 +33,7 @@
 
 #include "tempctrlpid_thr.h"
 
-
+unsigned char konfiguracja[512] __attribute__ ((section (".flash_config_data")));
 
 #define mainECHO_TASK_PRIORITY					( tskIDLE_PRIORITY + 1 )
 #define mainONEWIRE_TASK_PRIORITY				( tskIDLE_PRIORITY + 1 )
@@ -68,6 +68,34 @@ xSemaphoreHandle thermometer_sem;
 
 wdlist_s heater_list;
 xQueueHandle temp_pid_queue;
+
+
+
+k_uchar term1_id[6]= {0x00, 0x00, 0x04, 0xB1, 0x92, 0x3A};
+
+const thermometer_cfg_s thermometer_cfg_tab[]=
+	{
+
+	{{0x00, 0x00, 0x04, 0xB1, 0x92, 0x3A}, 0},
+	{{0x00, 0x00, 0x04, 0xB1, 0x6E, 0x30}, 1},
+	{{0x00, 0x00, 0x04, 0xB1, 0x8D, 0xB8}, 2},
+	{{0x00, 0x00, 0x04, 0xB1, 0xD7, 0x6A}, 3},
+
+	};
+
+const heater_cfg_s heater_cfg_tab[]=
+	{
+	{0},
+	{1},
+	{2},
+	{3},
+	{0},
+	{2},
+
+	};
+
+
+
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -107,21 +135,9 @@ void led_switch()
 
 int main()
 	{
+	k_uchar x;
 
 	USART_InitTypeDef USART_InitStructure;
-
-	thermometer_s *therm_new;
-	heater_s *heater_new;
-
-
-
-	// zatanowic sie czy dla 1-wire wyjscie PP czy OC !!!
-	// zatanowic sie czy dla 1-wire wyjscie PP czy OC !!!
-	// zatanowic sie czy dla 1-wire wyjscie PP czy OC !!!
-	// zatanowic sie czy dla 1-wire wyjscie PP czy OC !!!
-
-
-
 
 	GPIO_Configuration();
 	NVIC_Configuration();
@@ -153,35 +169,63 @@ int main()
 
 // odczyt konfiguracji
 
-
 	// termometry
 
-	therm_new= (thermometer_s *)malloc(sizeof(thermometer_s));
-	therm_new->onewire_handler= &onewire_chnlst[0];
-	therm_new->temp_vaild= false;
-	therm_new->temp_read_error_cntr= 0;
-	memset(therm_new->dev_id, 0x55, 8);
-	wdlist_append(&thermometer_list, (void *)therm_new);
+	for (x=0;x<(sizeof(thermometer_cfg_tab)/sizeof(thermometer_cfg_s));x++)
+		{
+		thermometer_cfg_s *thermometer_cfg= (thermometer_cfg_s *)&thermometer_cfg_tab[x];
+		thermometer_s *therm_new;
+
+		therm_new= (thermometer_s *)malloc(sizeof(thermometer_s));
+		therm_new->indx= x;
+		therm_new->onewire_handler= &onewire_chnlst[thermometer_cfg->chn_no];
+		therm_new->dev_id= thermometer_cfg->dev_id;
+		therm_new->temp_vaild= false;
+		therm_new->temp_read_error_cntr= 0;
+		therm_new->error_code= 0;
+		therm_new->temp_read_0x0550_cntr= 0;
+
+		wdlist_append(&thermometer_list, (void *)therm_new);
+
+		} // thermometer_cfg_tab
 
 	
 	// grzejniki
 
-	heater_new= (heater_s *)malloc(sizeof(heater_s));
-	heater_new->thermometer= therm_new;
-	heater_new->temp_zadana= 21000; // 21,0
-	heater_new->temp_offset= 0;
-	wdlist_append(&heater_list, (void *)heater_new);
+	for (x=0;x<(sizeof(heater_cfg_tab)/sizeof(heater_cfg_s));x++)
+		{
+		heater_cfg_s *heater_cfg= (heater_cfg_s *)&heater_cfg_tab[x];
+		heater_s *heater_new;
+		wdlist_entry_s *therm_entry;
+		k_uchar tindx;
+
+
+		tindx= 0;
+		therm_entry= thermometer_list.first_entry;
+
+		while (therm_entry && (tindx < heater_cfg->thermometer_no))
+			{
+			tindx++;
+			therm_entry= therm_entry->next;
+			}
+
+		heater_new= (heater_s *)malloc(sizeof(heater_s));
+		heater_new->indx= x;
+		heater_new->temp_zadana= 25000; // 25,0
+		heater_new->temp_offset= 0;
+		heater_new->thermometer= (therm_entry && (tindx == heater_cfg->thermometer_no)) ? (thermometer_s *)therm_entry->data : NULL;
+
+		wdlist_append(&heater_list, (void *)heater_new);
+
+		} // heater_cfg_tab
 
 
 
 
 
-
-
-
-	xTaskCreate(prvUSARTEchoTask, (signed char *)"Echo", configMINIMAL_STACK_SIZE, NULL, mainECHO_TASK_PRIORITY, NULL);
+	//xTaskCreate(prvUSARTEchoTask, (signed char *)"Echo", configMINIMAL_STACK_SIZE, NULL, mainECHO_TASK_PRIORITY, NULL);
 	xTaskCreate(prvOneWireTask, (signed char *)"1Wire", configMINIMAL_STACK_SIZE, NULL, mainONEWIRE_TASK_PRIORITY, NULL);
-	xTaskCreate(prvTempCtrlPIDTask, (signed char *)"PID", configMINIMAL_STACK_SIZE, NULL, mainTEMPCTRLPID_TASK_PRIORITY, NULL);
+	//xTaskCreate(prvTempCtrlPIDTask, (signed char *)"PID", configMINIMAL_STACK_SIZE, NULL, mainTEMPCTRLPID_TASK_PRIORITY, NULL);
 
 
 
@@ -266,6 +310,7 @@ static void prvUSARTEchoTask(void *pvParameters)
 			case -1:
 				{
 				printf("recv: error\n");
+				printf("%s\n", konfiguracja);
 				break;
 				}
 

@@ -8,8 +8,13 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "therm_ds18b20.h"
+
+//------------------------------------------------------------------------------
+
+//#define ONEWIRE_DEBUG
 
 //------------------------------------------------------------------------------
 
@@ -25,7 +30,7 @@ k_uchar therm_ds18b20_conversion_start(onewire_handler_s *onewire_handler, k_uch
 	result= onewire_bus_reset(onewire_handler);
 
 	if (result != 0x00)
-		return (k_uchar)-1;
+		return 0xF4;
 
 	if (dev_id == NULL)
 		onewire_write_byte(onewire_handler, ONE_WIRE_CMD_SKIP_ROM);				// 0xCC
@@ -57,12 +62,14 @@ k_uchar therm_ds18b20_conversion_start(onewire_handler_s *onewire_handler, k_uch
 
 //------------------------------------------------------------------------------
 
-k_uchar therm_ds18b20_temperature_read(onewire_handler_s *onewire_handler, k_uchar *dev_id, k_ushort *temp)
+k_uchar therm_ds18b20_temperature_read(onewire_handler_s *onewire_handler, k_uchar *dev_id, k_short *temp)
 	{
 	k_uchar result;
 	int x;
 	k_uchar crc8;
 	k_uchar correct= 0x01;
+	bool only0s= true;
+	bool only1s= true;
 
 	if (!onewire_handler || !temp)
 		return (k_uchar)-1;
@@ -70,7 +77,7 @@ k_uchar therm_ds18b20_temperature_read(onewire_handler_s *onewire_handler, k_uch
 	result= onewire_bus_reset(onewire_handler);
 
 	if (result != 0x00)
-		return (k_uchar)-1;
+		return 0xF4;
 
 	if (dev_id == NULL)
 		onewire_write_byte(onewire_handler, ONE_WIRE_CMD_SKIP_ROM);		// 0xCC
@@ -96,10 +103,24 @@ k_uchar therm_ds18b20_temperature_read(onewire_handler_s *onewire_handler, k_uch
 
 	onewire_write_byte(onewire_handler, ONE_WIRE_CMD_READ_SCRATCHPAD);	// 0xBE
 
+#if defined(ONEWIRE_DEBUG)
+	printf("<DBG> 1WIRE: INT:%04X:", onewire_handler->data_pin);
+#endif
+
 	for (x=0;x<9;x++)
 		{
 		result= onewire_read_byte(onewire_handler);
 		onewire_crc8(&crc8, result);
+
+		if (result != 0x00)
+			only0s= false;
+
+		if (result != 0xFF)
+			only1s= false;
+
+#if defined(ONEWIRE_DEBUG)
+		printf(" %02X", result);
+#endif
 
 		if (x < 2)
 			*((k_uchar *)temp + x)= result;
@@ -112,7 +133,27 @@ k_uchar therm_ds18b20_temperature_read(onewire_handler_s *onewire_handler, k_uch
 
 		} // for
 
-	return ((crc8 == 0x00) && correct) ? 0x00 : (k_uchar)-1;
+#if defined(ONEWIRE_DEBUG)
+	printf("  CRC: %s\n", ((crc8 == 0x00) ? "OK" : "BAD"));
+#endif
+
+
+	if ((crc8 == 0x00) && correct)
+		return 0x00;
+
+	if (only0s)
+		return 0xF0;
+
+	if (only1s)
+		return 0xF1;
+
+	if (crc8 != 0x00)
+		return 0xF2;
+
+	if (!correct)
+		return 0xF3;
+
+	return (k_uchar)-1;
 	}
 
 //------------------------------------------------------------------------------
@@ -129,15 +170,28 @@ k_uchar therm_ds18b20_id_read(onewire_handler_s *onewire_handler, k_uchar *dev_i
 
 	result= onewire_bus_reset(onewire_handler);
 
+#if defined(ONEWIRE_DEBUG)
+	printf("<DBG> 1WIRE: INT:%04X: RST: %02X\n", onewire_handler->data_pin, result);
+#endif
+
 	if (result != 0x00)
-		return (k_uchar)-1;
+		return 0xF4;
 
 	onewire_write_byte(onewire_handler, ONE_WIRE_CMD_READ_ROM);
+
+#if defined(ONEWIRE_DEBUG)
+	printf("<DBG> 1WIRE: INT:%04X:", onewire_handler->data_pin);
+#endif
+
 
 	for (x=0;x<8;x++)
 		{
 		result= onewire_read_byte(onewire_handler);
 		onewire_crc8(&crc8, result);
+
+#if defined(ONEWIRE_DEBUG)
+		printf(" %02X", result);
+#endif
 
 		if ((x == 0) && (result== DS18B20_FAMILY_CODE))
 			therm_family= 0x01;
@@ -145,6 +199,10 @@ k_uchar therm_ds18b20_id_read(onewire_handler_s *onewire_handler, k_uchar *dev_i
 		if ((x > 0) && (x < 7))
 			dev_id[6-x]= result;
 		}
+
+#if defined(ONEWIRE_DEBUG)
+	printf("  CRC: %s\n", ((crc8 == 0x00) ? "OK" : "BAD"));
+#endif
 
 	return ((crc8 == 0x00) && therm_family) ? 0x00 : (k_uchar)-1;
 	}

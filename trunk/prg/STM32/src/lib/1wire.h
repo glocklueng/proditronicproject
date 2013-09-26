@@ -42,6 +42,8 @@ typedef struct
 
 	uint16_t strong_pull_up_pin;
 	k_uchar strong_pull_up_enable;
+
+	k_uchar chn_no;
     
 	} onewire_handler_s;
 
