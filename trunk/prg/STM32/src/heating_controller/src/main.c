@@ -32,8 +32,11 @@
 #include "1wire_thr.h"
 
 #include "tempctrlpid_thr.h"
+#include "cmd_interpreter.h"
+
 
 unsigned char konfiguracja[512] __attribute__ ((section (".flash_config_data")));
+
 
 #define mainECHO_TASK_PRIORITY					( tskIDLE_PRIORITY + 1 )
 #define mainONEWIRE_TASK_PRIORITY				( tskIDLE_PRIORITY + 1 )
@@ -61,7 +64,11 @@ static void prvUSARTEchoTask(void *pvParameters);
 
 // globalne
 
+main_settings_s main_settings;
+
 onewire_handler_s onewire_chnlst[ONEWIRE_NBUS];
+heater_ctrl_handler_s heater_ctrl_chnlst[HEATER_NUMBER];
+
 
 wdlist_s thermometer_list;
 xSemaphoreHandle thermometer_sem;
@@ -71,15 +78,14 @@ xQueueHandle temp_pid_queue;
 
 
 
-k_uchar term1_id[6]= {0x00, 0x00, 0x04, 0xB1, 0x92, 0x3A};
 
 const thermometer_cfg_s thermometer_cfg_tab[]=
 	{
 
 	{{0x00, 0x00, 0x04, 0xB1, 0x92, 0x3A}, 0},
-	{{0x00, 0x00, 0x04, 0xB1, 0x6E, 0x30}, 1},
-	{{0x00, 0x00, 0x04, 0xB1, 0x8D, 0xB8}, 2},
-	{{0x00, 0x00, 0x04, 0xB1, 0xD7, 0x6A}, 3},
+//	{{0x00, 0x00, 0x04, 0xB1, 0x6E, 0x30}, 1},
+//	{{0x00, 0x00, 0x04, 0xB1, 0x8D, 0xB8}, 2},
+//	{{0x00, 0x00, 0x04, 0xB1, 0xD7, 0x6A}, 3},
 
 	};
 
@@ -87,10 +93,8 @@ const heater_cfg_s heater_cfg_tab[]=
 	{
 	{0},
 	{1},
-	{2},
-	{3},
-	{0},
-	{2},
+//	{2},
+//	{3},
 
 	};
 
@@ -109,26 +113,10 @@ void  Delay (uint32_t nCount)
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
-ktimer_spec_s timer_1;
-static int cntr= 0;
+//ktimer_spec_s timer_1;
+//static int cntr= 0;
 
 
-void led_switch()
-	{
-	static char ledstate= 0;
-
-	if (ledstate)
-		{
-		ledstate= 0;
-		GPIO_ResetBits(GPIOB , GPIO_Pin_0 | GPIO_Pin_1);
-		}
-	else
-		{
-		ledstate= 1;
-		GPIO_SetBits(GPIOB , GPIO_Pin_0 | GPIO_Pin_1);
-		}
-
-	}
 
 
 //------------------------------------------------------------------------------
@@ -147,15 +135,21 @@ int main()
 
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
 
+	//RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE); // PWM
+
 	USART_InitStructure.USART_BaudRate = 57600;
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
 	USART_InitStructure.USART_StopBits = USART_StopBits_1;
 	USART_InitStructure.USART_Parity = USART_Parity_No;
 
 	serial_port_init(1, &USART_InitStructure); // console init
-	serial_port_rx_timeout_set(1, 1000);
+	serial_port_rx_timeout_set(1, 30000);
 
 	ktimerlst_init();
+
+	cmd_interpreter_init();
+	cmd_interpreter_cmd_append("heater", &cmdline_heater_pwm_set);
 
 
 
@@ -167,7 +161,19 @@ int main()
 	temp_pid_queue= xQueueCreate(1, 1);
 
 
+
+	for (x=0;x<HEATER_NUMBER;x++)
+		heater_ctrl_chnlst[x].peripheral_addr= NULL;
+
+
+
+
+
 // odczyt konfiguracji
+
+
+	main_settings.global_mode= GLOBAL_MODE_HEATING;
+
 
 	// termometry
 
@@ -211,9 +217,10 @@ int main()
 
 		heater_new= (heater_s *)malloc(sizeof(heater_s));
 		heater_new->indx= x;
-		heater_new->temp_zadana= 25000; // 25,0
+		heater_new->temp_zadana= 33060; // 25,0
 		heater_new->temp_offset= 0;
 		heater_new->thermometer= (therm_entry && (tindx == heater_cfg->thermometer_no)) ? (thermometer_s *)therm_entry->data : NULL;
+		heater_new->heater_ctrl_handler= &heater_ctrl_chnlst[x];
 
 		wdlist_append(&heater_list, (void *)heater_new);
 
@@ -225,7 +232,8 @@ int main()
 
 	//xTaskCreate(prvUSARTEchoTask, (signed char *)"Echo", configMINIMAL_STACK_SIZE, NULL, mainECHO_TASK_PRIORITY, NULL);
 	xTaskCreate(prvOneWireTask, (signed char *)"1Wire", configMINIMAL_STACK_SIZE, NULL, mainONEWIRE_TASK_PRIORITY, NULL);
-	//xTaskCreate(prvTempCtrlPIDTask, (signed char *)"PID", configMINIMAL_STACK_SIZE, NULL, mainTEMPCTRLPID_TASK_PRIORITY, NULL);
+	xTaskCreate(prvTempCtrlPIDTask, (signed char *)"PID", configMINIMAL_STACK_SIZE, NULL, mainTEMPCTRLPID_TASK_PRIORITY, NULL);
+	xTaskCreate(prvCmdInterpreterTask, (signed char *)"CMD", configMINIMAL_STACK_SIZE, NULL, mainTEMPCTRLPID_TASK_PRIORITY, NULL);
 
 
 
@@ -244,8 +252,10 @@ void GPIO_Configuration(void)
 	GPIO_InitTypeDef GPIO_InitStructure;
 /*
 //	RCC_APB2PeriphClockCmd( RCC_APB2Periph_GPIOB | RCC_APB2Periph_GPIOC , ENABLE);
+	RCC_APB2PeriphClockCmd( RCC_APB2Periph_GPIOB , ENABLE);
 
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1;
+//	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1;
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
@@ -276,13 +286,12 @@ void NVIC_Configuration(void)
 
 
 	// Enable the TIM2 Interrupt
+	// used by ktimerlst
 	NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
 	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
-
-
 
 	}
 
@@ -301,6 +310,12 @@ static void prvUSARTEchoTask(void *pvParameters)
 	while (1)
 		{
 
+		msleep(1000);
+
+		led_switch();
+
+
+/*
 		result= serial_port_read(1, rxbuff, 32);
 
 
@@ -335,7 +350,7 @@ static void prvUSARTEchoTask(void *pvParameters)
 				}
 
 			}
-
+*/
 //		GPIO_SetBits(GPIOB , GPIO_Pin_0 | GPIO_Pin_1);
 //		vTaskDelay(1000);
 //		GPIO_ResetBits(GPIOB , GPIO_Pin_0 | GPIO_Pin_1);
