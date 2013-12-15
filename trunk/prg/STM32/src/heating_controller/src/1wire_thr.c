@@ -45,6 +45,7 @@ extern xSemaphoreHandle thermometer_sem;
 extern onewire_handler_s onewire_chnlst[ONEWIRE_NBUS];
 extern xQueueHandle temp_pid_queue;
 extern wdlist_s heater_list;
+extern unsigned char *cmd_inter_strtok_del;
 
 //-----------------------------------------------------------------------------
 
@@ -237,6 +238,9 @@ void prvOneWireTask(void *pvParameters)
 		owire_resp= therm_ds18b20_temperature_read(therm_curr->onewire_handler, therm_curr->dev_id, &temp_read);
 //		owire_resp= therm_ds18b20_temperature_read(therm_curr->onewire_handler, NULL, &temp_read);
 
+		if (therm_curr->temp_debug_f)
+			temp_read= therm_curr->temp_debug_value;
+
 		if (owire_resp == 0x00)
 			{
 
@@ -308,8 +312,10 @@ void prvOneWireTask(void *pvParameters)
 
 				xSemaphoreGive(thermometer_sem);
 
-
-				printf("<TRM> dev[%02d]: chn[%d] id[%s] t=%f tavrg=%f\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str, temp_dbg, temp_avr_f);
+				if (!therm_curr->temp_debug_f)
+					printf("<TRM> dev[%02d]: chn[%d] id[%s] t=%f tavrg=%f\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str, temp_dbg, temp_avr_f);
+				else
+					printf("<TRM> dev[%02d]: chn[%d] id[%s] t=%f tavrg=%f FORCED\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str, temp_dbg, temp_avr_f);
 
 				} // prawid³owy odczyt temperatury
 			else
@@ -419,8 +425,8 @@ void prvOneWireTask(void *pvParameters)
 			temp_queue_dta= 0x00;
             xQueueSend(temp_pid_queue, &temp_queue_dta, (portTickType)0);
 
-			msleep(1000);
-			//vTaskDelayUntil(&xLastWakeTime, (THERMOMETER_READ_PERIOD * 1000 / portTICK_RATE_MS));
+			//msleep(1000);
+			vTaskDelayUntil(&xLastWakeTime, (THERMOMETER_READ_PERIOD * 1000 / portTICK_RATE_MS));
 			}
 
 		} // while (1)
@@ -435,3 +441,118 @@ void prvOneWireTask(void *pvParameters)
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 
+void cmdline_thermometer_temp_set(unsigned char *param)
+	{
+	unsigned char *tokptr;
+	k_uchar indx= 0;
+
+	thermometer_s *therm= NULL;
+	k_uchar cmd= 0xFF;
+	k_uchar nparam= 0;
+
+	const k_uchar max_nparam= 3;
+	k_ulong paramsval[max_nparam];
+
+	while (param)
+		{
+
+		switch (indx)
+			{
+
+			case 0:	// indeks termometru
+				{
+				wdlist_entry_s *entry;
+				thermometer_s *therm_tmp;
+				k_uchar hindx;
+
+				hindx= atoi(param);
+
+				entry= thermometer_list.first_entry;
+				while (entry)
+					{
+					therm_tmp= (thermometer_s *)entry->data;
+
+					if (therm_tmp->indx == hindx)
+						{
+						therm= therm_tmp;
+						break;
+						}
+
+					entry= entry->next;
+					}
+
+				break;
+				}
+
+
+			case 1:
+				{
+
+				if (!strcmp(param, "temp"))
+					cmd= 0x01;
+
+
+				break;
+				}
+
+			default:
+				{
+
+				if (nparam < max_nparam)
+					{
+					paramsval[nparam]= atoi(param);
+					nparam++;
+					}
+
+				break;
+				}
+
+			} // switch (indx)
+
+		indx++;
+		param= strtok(NULL, cmd_inter_strtok_del);
+		}
+
+
+	if (therm)
+		{
+
+		switch (cmd)
+			{
+
+			case 0x01:	// temp
+				{
+
+				if (nparam == 1)
+					{
+
+					if (paramsval[0] == 0)
+						{
+						therm->temp_debug_f= false;
+
+						printf("<TRM> dev[%02d] set to: real value\n", therm->indx);
+						}
+					else
+						{
+						therm->temp_debug_value= ((paramsval[0] / 1000) << 4) | ((k_short)((float)(paramsval[0] % 1000) / 1000.0 * 16) & 0xF);
+						therm->temp_debug_f= true;
+
+						printf("<TRM> dev[%02d] set to value: %2.3f\n", therm->indx, (float)(paramsval[0] / 1000.0));
+						}
+
+					}
+
+				break;
+				}
+
+
+			} // switch (cmd)
+
+
+		} // if (therm)
+
+
+	}
+
+
+//-----------------------------------------------------------------------------

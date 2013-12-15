@@ -91,8 +91,9 @@ const thermometer_cfg_s thermometer_cfg_tab[]=
 
 const heater_cfg_s heater_cfg_tab[]=
 	{
+	// termometr_index,
 	{0},
-	{1},
+	{0},
 //	{2},
 //	{3},
 
@@ -149,7 +150,11 @@ int main()
 	ktimerlst_init();
 
 	cmd_interpreter_init();
-	cmd_interpreter_cmd_append("heater", &cmdline_heater_pwm_set);
+
+	cmd_interpreter_cmd_append("heater", &cmdline_heater_param_set);
+	cmd_interpreter_cmd_append("therm", &cmdline_thermometer_temp_set);
+	cmd_interpreter_cmd_append("pwmmaxduty", &cmdline_heater_pwm_duty_ratio_max_set);
+	cmd_interpreter_cmd_append("pid", &cmdline_pid_set);
 
 
 
@@ -167,6 +172,10 @@ int main()
 
 
 
+	// uwaga! przy zmianie nastaw temperatury dla grzejnika wyczycic dane PID jak w funckji cmdline_heater_param_set
+	// uwaga! przy zmianie nastaw temperatury dla grzejnika wyczycic dane PID jak w funckji cmdline_heater_param_set
+	// uwaga! przy zmianie nastaw temperatury dla grzejnika wyczycic dane PID jak w funckji cmdline_heater_param_set
+	// uwaga! przy zmianie nastaw temperatury dla grzejnika wyczycic dane PID jak w funckji cmdline_heater_param_set
 
 
 // odczyt konfiguracji
@@ -190,6 +199,7 @@ int main()
 		therm_new->temp_read_error_cntr= 0;
 		therm_new->error_code= 0;
 		therm_new->temp_read_0x0550_cntr= 0;
+		therm_new->temp_debug_f= false;
 
 		wdlist_append(&thermometer_list, (void *)therm_new);
 
@@ -217,8 +227,9 @@ int main()
 
 		heater_new= (heater_s *)malloc(sizeof(heater_s));
 		heater_new->indx= x;
-		heater_new->temp_zadana= 33060; // 25,0
+		heater_new->temp_zadana= 22000;
 		heater_new->temp_offset= 0;
+		heater_new->max_throttle_timeout_active= false;
 		heater_new->thermometer= (therm_entry && (tindx == heater_cfg->thermometer_no)) ? (thermometer_s *)therm_entry->data : NULL;
 		heater_new->heater_ctrl_handler= &heater_ctrl_chnlst[x];
 

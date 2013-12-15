@@ -23,6 +23,7 @@
 
 
 #include "ksystem.h"
+#include "global.h"
 #include "1wire.h"
 
 
@@ -50,12 +51,6 @@ const k_uchar dscrc_table[] = {
       116, 42,200,150, 21, 75,169,247,182,232, 10, 84,215,137,107, 53};
 
 //------------------------------------------------------------------------------
-
-#define GPIOA_CLK_ENABLE_BIT	(1 << 0)
-#define GPIOB_CLK_ENABLE_BIT	(1 << 1)
-#define GPIOC_CLK_ENABLE_BIT	(1 << 2)
-#define GPIOD_CLK_ENABLE_BIT	(1 << 3)
-
 
 ktimerlst_spec_s onewire_timer;
 
