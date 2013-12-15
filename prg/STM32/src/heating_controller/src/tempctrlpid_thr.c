@@ -18,9 +18,9 @@
 //-----------------------------------------------------------------------------
 
 // PID wspó³czynniki
-const k_long Kp= 10000;			// 10,000
-const k_long Ki= 10;			// 0,010
-const k_long Kd= 10000;			// 10,000
+const k_long Kp_def= 32000;			// 10,000
+const k_long Ki_def= 400;			// 0,010
+const k_long Kd_def= 12000;			// 10,000
 
 // nastawy min, max
 
@@ -29,18 +29,23 @@ const k_long Kd= 10000;			// 10,000
 
 
 #define PWM_WARM_DOWN_FACTOR		200			// [0,1%]
-#define PWM_WARM_CONST_FACTOR		300			// [0,1%]
+#define PWM_WARM_CONST_FACTOR		400			// [0,1%]
 
 
 
-#define PWM_PERIOD				60 				// sec
-#define PWM_TIMER_FREQ			2000			// Hz
+#define PWM_PERIOD						20 				// sec
+#define PWM_TIMER_FREQ					1200			// Hz
+#define PWM_DUTY_RATIO_MAX_DEFAULT		1000
+#define PWM_DUTY_RATIO_CUTOFF			350
+
+#define PWM_MAX_THROTTLE_TIMEOUT		480				// sec
+
 
 //#define PWM_CYCLE_TICKS			(uint16_t)(PWM_PERIOD * PWM_TIMER_FREQ)
 //#define	PWM_PID_RATIO			(float)((float)PWM_CYCLE_TICKS / (float)PID_REG_MAX)
 
 
-// 30%/20
+// 45%/20 !!!
 
 
 //-----------------------------------------------------------------------------
@@ -54,6 +59,12 @@ extern xQueueHandle temp_pid_queue;
 
 extern heater_ctrl_handler_s heater_ctrl_chnlst[HEATER_NUMBER];
 extern unsigned char *cmd_inter_strtok_del;
+
+
+
+int pwm_duty_ratio_max;
+k_long Kp, Ki, Kd;
+
 
 //-----------------------------------------------------------------------------
 
@@ -94,12 +105,20 @@ void prvTempCtrlPIDTask(void *pvParameters)
 	k_long temp_uchyb;
 	k_long ctrl_param;
 
-	int licznik= 0;
 	uint16_t duty_ratio;
+
+	portTickType ticks_curr;
+	portTickType ticks_prev;
+	k_ulong time_elapsed_sec;
 
 	//k_uchar
 
 
+	pwm_duty_ratio_max= PWM_DUTY_RATIO_MAX_DEFAULT;
+
+	Kp= Kp_def;
+	Ki= Ki_def;
+	Kd= Kd_def;
 
 
 
@@ -123,6 +142,8 @@ void prvTempCtrlPIDTask(void *pvParameters)
 	heater_ctrl_chnlst[1].period= PWM_PERIOD;
 	heater_ctrl_chnlst[1].pwm_chn= 2;
 	pwm_channel_init(&heater_ctrl_chnlst[1]);
+
+
 /*
 	heater_ctrl_chnlst[2].peripheral_addr= (uint32_t)GPIOB;
 	heater_ctrl_chnlst[2].ctrl_pin= GPIO_Pin_8;				// TIM4_CH3
@@ -137,10 +158,6 @@ void prvTempCtrlPIDTask(void *pvParameters)
 	pwm_channel_init(&heater_ctrl_chnlst[3]);
 */
 
-	pwm_channel_set(&heater_ctrl_chnlst[0], 1000);
-	pwm_channel_set(&heater_ctrl_chnlst[1], 1000);
-//	pwm_channel_set(&heater_ctrl_chnlst[2], 500);
-//	pwm_channel_set(&heater_ctrl_chnlst[3], 700);
 
 
 
@@ -156,98 +173,28 @@ void prvTempCtrlPIDTask(void *pvParameters)
 		}
 
 
+	ticks_prev= xTaskGetTickCount();
 
 	queue_dta= 0x01; // init
 	xQueueSend(temp_pid_queue, &queue_dta, (portTickType)0);
 
 
-/*
-	duty_ratio= 1000;
-	pwm_channel_set(&heater_ctrl_chnlst[0], duty_ratio);
-
-	duty_ratio= 1000;
-	pwm_channel_set(&heater_ctrl_chnlst[1], duty_ratio);
-
-	licznik= 180;
-	while (licznik != 0)
-		{
-		printf("%03d: set: %d\n", licznik, duty_ratio);
-		msleep(1000);
-		licznik-= 1;
-		}
-
-
-
-
-	duty_ratio= 200;
-	pwm_channel_set(&heater_ctrl_chnlst[0], duty_ratio);
-
-	duty_ratio= 200;
-	pwm_channel_set(&heater_ctrl_chnlst[1], duty_ratio);
-
-	licznik= 18000;
-	while (licznik != 0)
-		{
-		printf("%03d: set: %d\n", licznik, duty_ratio);
-		msleep(1000);
-		licznik-= 1;
-		}
-*/
-/*
-	duty_ratio= 400;
-	pwm_channel_set(&heater_ctrl_chnlst[0], duty_ratio);
-
-	licznik= 180;
-	while (licznik != 0)
-		{
-		printf("%03d: set: %d\n", licznik, duty_ratio);
-		msleep(1000);
-		licznik-= 1;
-		}
-
-
-	duty_ratio= 300;
-	pwm_channel_set(&heater_ctrl_chnlst[0], duty_ratio);
-
-	licznik= 180;
-	while (licznik != 0)
-		{
-		printf("%03d: set: %d\n", licznik, duty_ratio);
-		msleep(1000);
-		licznik-= 1;
-		}
-
-
-	duty_ratio= 200;
-	pwm_channel_set(&heater_ctrl_chnlst[0], duty_ratio);
-
-	licznik= 180;
-	while (licznik != 0)
-		{
-		printf("%03d: set: %d\n", licznik, duty_ratio);
-		msleep(1000);
-		licznik-= 1;
-		}
-
-
-	duty_ratio= 100;
-	pwm_channel_set(&heater_ctrl_chnlst[0], duty_ratio);
-
-	licznik= 180;
-	while (licznik != 0)
-		{
-		printf("%03d: set: %d\n", licznik, duty_ratio);
-		msleep(1000);
-		licznik-= 1;
-		}
-
-*/
-
 
 	while (1)
 		{
 
+
 		xQueueReceive(temp_pid_queue, &queue_dta, portMAX_DELAY); // czekam na zakoñczenie cyklu odczytu temperatur
+
+
+		ticks_curr= xTaskGetTickCount();
+		time_elapsed_sec= (ticks_curr >= ticks_prev) ? (ticks_curr - ticks_prev) : (0xFFFFFFFF - ticks_prev + 1 + ticks_curr);
+		time_elapsed_sec/= configTICK_RATE_HZ;
+		ticks_prev= ticks_curr;
+
+
+
+
 
 
 		heater_entry= heater_list.first_entry;
@@ -260,7 +207,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 
 
 
-/*
+
 			switch (main_settings.global_mode)
 				{
 
@@ -268,8 +215,8 @@ void prvTempCtrlPIDTask(void *pvParameters)
 					{
 
 
-
-
+					// wy³¹czenie timera
+					heater->max_throttle_timeout_active= false;
 
 
 					break;
@@ -292,7 +239,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 
 
 				} // switch (main_settings.global_mode)
-*/
+
 
 
 
@@ -313,11 +260,17 @@ void prvTempCtrlPIDTask(void *pvParameters)
 					//pwm_channel_set
 
 					
+					// wy³¹czenie timera
+					heater->max_throttle_timeout_active= false;
+
+
+
 					}
 				else
 					{
 
 					heater_temp= (k_long)thermometer->temp_value;
+
 
 					xSemaphoreGive(thermometer_sem);
 
@@ -328,71 +281,86 @@ void prvTempCtrlPIDTask(void *pvParameters)
 						heater_temp+= heater->temp_offset;
 
 					temp_uchyb= heater->temp_zadana - heater_temp;
-					//temp_uchyb= 100;
 
 					if (heater->PID_data.uchyb_prev == 0x80000000)
 						heater->PID_data.uchyb_prev= temp_uchyb;
 
-
 					ctrl_param= temp_pid_process(&heater->PID_data, temp_uchyb);
 
+					duty_ratio= (uint16_t)round((((float)ctrl_param / (float)PID_REG_MAX) * pwm_duty_ratio_max));
 
-					if (temp_uchyb < 0)
-						{
-						// obni¿anie temperatury
 
-						//duty_ratio=
 
-						}
+					if (duty_ratio > pwm_duty_ratio_max)
+						duty_ratio= pwm_duty_ratio_max;
 					else
-					if (ctrl_param == PID_REG_MIN)
+					if (duty_ratio < PWM_DUTY_RATIO_CUTOFF)
 						{
-						// utrzymanie temperatury
-
-
-
+						printf("<HTR> dev[%02d]: CLOSED\n", heater->indx);
+						duty_ratio= 0;
 						}
-					else
+
+					if ((duty_ratio > 0) && (temp_uchyb <= 0))
 						{
-						// nagrzewanie
-
-
-
-
-
+						printf("<HTR> dev[%02d]: CLOSED, OVERHEATING\n", heater->indx);
+						duty_ratio= 0;
 						}
 
 
+					// zabezpieczenie przed ci¹g³ym za³¹czeniem grzania na full, w przypadku, gdy np. wy³aczony jest piec
+					// jesli czas otwarcia na full (np. > 800) trwa powyzej x sekund, to za³¹czyc pwm na podtrzymanie
+
+					if ((heater->max_throttle_timeout_active == true) && (duty_ratio < 800))
+						{
+						// wy³¹czenie timera
+						heater->max_throttle_timeout_active= false;
+						printf("<HTR> dev[%02d]: full throttle timer stop\n", heater->indx);
+						}
+
+					if (heater->max_throttle_timeout_active == true)
+						{
+						if (heater->max_throttle_timeout != 0)
+							{
+							if (heater->max_throttle_timeout >= time_elapsed_sec)
+								heater->max_throttle_timeout-= time_elapsed_sec;
+							else
+								heater->max_throttle_timeout= 0;
+							}
+
+						if (heater->max_throttle_timeout == 0)
+							{
+							printf("<HTR> dev[%02d]: full throttle timer elapsed\n", heater->indx);
+							duty_ratio= PWM_WARM_CONST_FACTOR;
+							}
+						else
+							printf("<HTR> dev[%02d]: full throttle timer: %03d\n", heater->indx, heater->max_throttle_timeout);
+						}
+
+					if ((duty_ratio > 900) && (heater->max_throttle_timeout_active == false))
+						{
+						// za³¹czenie timera
+						heater->max_throttle_timeout= PWM_MAX_THROTTLE_TIMEOUT;
+						heater->max_throttle_timeout_active= true;
+
+						printf("<HTR> dev[%02d]: full throttle timer start\n", heater->indx);
+						}
 
 
+					printf("<HTR> dev[%02d]: therm[%02d] tset=%2.3f toff=%2.3f tdiff=%2.3f\n", heater->indx, heater->thermometer->indx, (float)heater->temp_zadana/1000, (float)heater->temp_offset/1000, (float)temp_uchyb/1000);
+					printf("<HTR> dev[%02d]: PID: %4d %4d %4d \n", heater->indx, heater->PID_data.P/1000, heater->PID_data.I/1000, heater->PID_data.D/1000);
+					printf("<HTR> dev[%02d]: PID param: %05d  duty_ratio: %04d\n", heater->indx, ctrl_param, duty_ratio);
 
-					if (licznik < 20)
-						duty_ratio= 500;//(uint16_t)round((((float)ctrl_param / (float)PID_REG_MAX) * 1000));
-					else
-						duty_ratio= 100;
-
-
-
-
-					//printf("<HTR> dev[%02d]: therm[%02d] tset=%2.3f toff=%2.3 \n", heater->indx, heater->thermometer->indx, (float)heater->temp_zadana/1000, (float)heater->temp_offset/1000);
-
-
-					if (duty_ratio > 1000)
-						duty_ratio= 1000;
 
 					if (heater_ctrl_handler->duty_ratio != duty_ratio)
 						{
-						printf("set: %d\n", duty_ratio);
-						//pwm_channel_set(heater_ctrl_handler, duty_ratio); // 0 - 1000
+						printf("<HTR> dev[%02d]: PWM duty ratio set to:  %04d\n", heater->indx, duty_ratio);
+						pwm_channel_set(heater_ctrl_handler, duty_ratio); // 0 - pwm_duty_ratio_max
 						}
 
 
 
 
-					printf("%06d  %06d  %06d  %06d duty_ratio: %d\n", heater->temp_zadana, heater_temp, temp_uchyb, ctrl_param, duty_ratio);
 
-
-					licznik++;
 
 
 					}
@@ -423,12 +391,12 @@ k_long temp_pid_process(PID_data_s *PID_data, k_long uchyb)
 	{
 	k_long result;
     
-	k_long P= Kp * uchyb;
-	k_long I= Ki * (uchyb + PID_data->uchyb_prev) / 2 + PID_data->I_prev;
-	k_long D= Kd * (uchyb - PID_data->uchyb_prev);
+	PID_data->P= Kp * uchyb;
+	PID_data->I= Ki * (uchyb + PID_data->uchyb_prev) / 2 + PID_data->I_prev;
+	PID_data->D= Kd * (uchyb - PID_data->uchyb_prev);
 	
 	PID_data->uchyb_prev= uchyb;
-	result= P + I + D;
+	result= PID_data->P + PID_data->I + PID_data->D;
 	result/= 1000;
 
 	if (result < PID_REG_MIN)
@@ -437,7 +405,7 @@ k_long temp_pid_process(PID_data_s *PID_data, k_long uchyb)
 	if (result > PID_REG_MAX)
 		result= PID_REG_MAX;
 	else
-		PID_data->I_prev= I;
+		PID_data->I_prev= PID_data->I;
 
 	return result;
 	}
@@ -486,6 +454,12 @@ k_long pwm_channel_init(heater_ctrl_handler_s *heater_ctrl_handler)
 
 		PrescalerValue= (uint16_t)(SystemCoreClock / PWM_TIMER_FREQ) - 1;
 
+		if ((SystemCoreClock / PWM_TIMER_FREQ) >= 0x10000)
+			printf("<ERR> %s: TIM_Prescaler overrange !\n", __FUNCTION__);
+
+		if (((int)heater_ctrl_handler->period * PWM_TIMER_FREQ) >= 0x10000)
+			printf("<ERR> %s: TIM_Period overrange !\n", __FUNCTION__);
+
 		// TIMx configuration
 		TIM_TimeBaseStructure.TIM_Period= (uint16_t)(heater_ctrl_handler->period * PWM_TIMER_FREQ);
 		TIM_TimeBaseStructure.TIM_Prescaler= PrescalerValue;
@@ -507,40 +481,14 @@ k_long pwm_channel_init(heater_ctrl_handler_s *heater_ctrl_handler)
 		}
 
 
-
-
-/*
-	PrescalerValue= (uint16_t)(SystemCoreClock / PWM_TIMER_FREQ) - 1;
-
-	// TIMx configuration
-	TIM_TimeBaseStructure.TIM_Period= (uint16_t)(heater_ctrl_handler->period * PWM_TIMER_FREQ);
-	TIM_TimeBaseStructure.TIM_Prescaler= PrescalerValue;
-	TIM_TimeBaseStructure.TIM_ClockDivision= 0;
-	TIM_TimeBaseStructure.TIM_CounterMode= TIM_CounterMode_Up;
-	TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
-
 	GPIO_InitStructure.GPIO_Pin= heater_ctrl_handler->ctrl_pin;
 	GPIO_InitStructure.GPIO_Speed= GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP;
 	GPIO_Init((GPIO_TypeDef *)heater_ctrl_handler->peripheral_addr, &GPIO_InitStructure);
 	GPIO_ResetBits((GPIO_TypeDef *)heater_ctrl_handler->peripheral_addr, heater_ctrl_handler->ctrl_pin);
-*/
-
-	GPIO_InitStructure.GPIO_Pin= heater_ctrl_handler->ctrl_pin;
-	GPIO_InitStructure.GPIO_Speed= GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_Mode= GPIO_Mode_Out_PP;
-	GPIO_Init((GPIO_TypeDef *)heater_ctrl_handler->peripheral_addr, &GPIO_InitStructure);
-	GPIO_ResetBits((GPIO_TypeDef *)heater_ctrl_handler->peripheral_addr, heater_ctrl_handler->ctrl_pin);
-
-
-
-
-
-
 
 
 	heater_ctrl_handler->duty_ratio= 0;
-
 
 	return 0;
 	}
@@ -549,7 +497,6 @@ k_long pwm_channel_init(heater_ctrl_handler_s *heater_ctrl_handler)
 
 k_long pwm_channel_set(heater_ctrl_handler_s *heater_ctrl_handler, uint16_t duty_ratio)
 	{
-	uint16_t PrescalerValue;
 	TIM_OCInitTypeDef TIM_OCInitStructure;
 	GPIO_InitTypeDef GPIO_InitStructure;
 
@@ -677,7 +624,7 @@ heater <number> pwm <value>
 
 */
 
-void cmdline_heater_pwm_set(unsigned char *param)
+void cmdline_heater_param_set(unsigned char *param)
 	{
 	unsigned char *tokptr;
 	k_uchar indx= 0;
@@ -726,6 +673,9 @@ void cmdline_heater_pwm_set(unsigned char *param)
 
 				if (!strcmp(param, "pwm"))
 					cmd= 0x01;
+				else
+				if (!strcmp(param, "temp"))
+					cmd= 0x02;
 
 				break;
 				}
@@ -748,7 +698,6 @@ void cmdline_heater_pwm_set(unsigned char *param)
 		param= strtok(NULL, cmd_inter_strtok_del);
 		}
 
-	printf("cmd: %08X %02X %d\n", heater, cmd, nparam);
 
 	if (heater)
 		{
@@ -758,34 +707,158 @@ void cmdline_heater_pwm_set(unsigned char *param)
 
 			case 0x01:	// pwm
 				{
-
 				if (nparam == 1)
 					{
 					printf("<HTR> dev[%02d]: PWM set to %d\n", heater->indx, paramsval[0]);
 					pwm_channel_set(heater->heater_ctrl_handler, paramsval[0]);
 					}
+				break;
+				}
 
+			case 0x02:	// temperatura zadana
+				{
+				if (nparam == 1)
+					{
+					printf("<HTR> dev[%02d]: temp set to %d\n", heater->indx, paramsval[0]);
+
+					heater->temp_zadana= paramsval[0];
+
+					heater->PID_data.uchyb_prev= 0x80000000; // magic value
+					heater->PID_data.I_prev= 0;
+
+					}
 				break;
 				}
 
 			} // switch (cmd)
 
 
+		} // if (heater)
+
+	}
+
+//-----------------------------------------------------------------------------
+
+void cmdline_heater_pwm_duty_ratio_max_set(unsigned char *param)
+	{
+	k_ulong paramsval;
+
+	if (!param)
+		return;
+
+	paramsval= atoi(param);
+
+	if (paramsval < 0)
+		paramsval= 0;
+	else
+	if (paramsval > 1000)
+		paramsval= 1000;
+
+	pwm_duty_ratio_max= paramsval;
+
+	printf("<PWM> max duty ratio set to %d\n", pwm_duty_ratio_max);
+
+	}
+
+//-----------------------------------------------------------------------------
+
+void cmdline_pid_set(unsigned char *param)
+	{
+	unsigned char *tokptr;
+	k_uchar indx= 0;
+
+	k_uchar cmd= 0xFF;
+	k_uchar nparam= 0;
+
+	const k_uchar max_nparam= 3;
+	k_ulong paramsval[max_nparam];
+
+	while (param)
+		{
+
+		switch (indx)
+			{
+
+			case 0:
+				{
+
+				if (!strcmp(param, "p"))
+					cmd= 0x01;
+				else
+				if (!strcmp(param, "i"))
+					cmd= 0x02;
+				else
+				if (!strcmp(param, "d"))
+					cmd= 0x03;
+
+				break;
+				}
+
+			default:
+				{
+
+				if (nparam < max_nparam)
+					{
+					paramsval[nparam]= atoi(param);
+					nparam++;
+					}
+
+				break;
+				}
+
+			} // switch (indx)
+
+		indx++;
+		param= strtok(NULL, cmd_inter_strtok_del);
 		}
 
 
 
+	switch (cmd)
+		{
+
+		case 0x01:	// PID P
+			{
+
+			if (nparam == 1)
+				{
+				Kp= paramsval[0];
+				printf("<PID> P set to: %d\n", Kp);
+				}
+
+			break;
+			}
+
+		case 0x02:	// PID I
+			{
+
+			if (nparam == 1)
+				{
+				Ki= paramsval[0];
+				printf("<PID> I set to: %d\n", Ki);
+				}
+
+			break;
+			}
+
+		case 0x03:	// PID D
+			{
+
+			if (nparam == 1)
+				{
+				Kd= paramsval[0];
+				printf("<PID> D set to: %d\n", Kd);
+				}
+
+			break;
+			}
+
+		} // switch (cmd)
+
+
 
 	}
 
-//-----------------------------------------------------------------------------
 
-void cmdline_heater_pwm_set2(unsigned char *param)
-	{
-
-
-	}
-
-//-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 

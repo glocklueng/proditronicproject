@@ -30,6 +30,11 @@ typedef struct
 	k_long uchyb_prev;
 	k_long I_prev;
 
+	k_long P;
+	k_long I;
+	k_long D;
+
+
 	} PID_data_s;
 
 
@@ -60,6 +65,10 @@ typedef struct
 
 	k_uchar state;
 
+	bool max_throttle_timeout_active;
+	k_ushort max_throttle_timeout;
+
+
 	} heater_s;
 
 
@@ -71,9 +80,9 @@ k_long pwm_channel_set(heater_ctrl_handler_s *heater_ctrl_handler, uint16_t duty
 void prvTempCtrlPIDTask(void *pvParameters);
 
 
-void cmdline_heater_pwm_set(unsigned char *param);
-void cmdline_heater_pwm_set2(unsigned char *param);
-
+void cmdline_heater_param_set(unsigned char *param);
+void cmdline_heater_pwm_duty_ratio_max_set(unsigned char *param);
+void cmdline_pid_set(unsigned char *param);
 
 //-----------------------------------------------------------------------------
 

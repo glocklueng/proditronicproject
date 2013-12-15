@@ -18,7 +18,7 @@
 
 //-----------------------------------------------------------------------------
 
-#define THERMOMETER_READ_PERIOD			10 // sec
+#define THERMOMETER_READ_PERIOD			15 // sec
 #define THERMOMETER_READ_ERROR_MAX		3
 
 #define THERMOMETER_READ_CNTR			3
@@ -57,6 +57,8 @@ typedef struct
 	k_uchar error_code;
 	k_uchar temp_read_0x0550_cntr;
 
+	k_short temp_debug_value;
+	bool temp_debug_f;
 
 	} thermometer_s;
 
@@ -67,6 +69,7 @@ typedef struct
 
 void prvOneWireTask(void *pvParameters);
 
+void cmdline_thermometer_temp_set(unsigned char *param);
 
 
 //-----------------------------------------------------------------------------
