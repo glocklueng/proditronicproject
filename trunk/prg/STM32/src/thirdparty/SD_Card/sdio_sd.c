@@ -750,6 +750,10 @@ SD_Error SD_GetCardInfo(SD_CardInfo *cardinfo)
     cardinfo->CardCapacity = (cardinfo->SD_csd.DeviceSize + 1) ;
     cardinfo->CardCapacity *= (1 << (cardinfo->SD_csd.DeviceSizeMul + 2));
     cardinfo->CardBlockSize = 1 << (cardinfo->SD_csd.RdBlockLen);
+
+    if (cardinfo->CardBlockSize > 512)
+    	cardinfo->CardBlockSize= 512;
+
     cardinfo->CardCapacity *= cardinfo->CardBlockSize;
   }
   else if (CardType == SDIO_HIGH_CAPACITY_SD_CARD)
@@ -3040,6 +3044,22 @@ static uint8_t convert_from_bytes_to_power_of_two(uint16_t NumberOfBytes)
   }
   return(count);
 }
+
+
+/*******************************************************************************
+* Function Name  : SDIO_IRQHandler
+* Description    : This function handles SDIO global interrupt request.
+* Input          : None
+* Output         : None
+* Return         : None
+* Attention		 : None
+*******************************************************************************/
+void SDIO_IRQHandler(void)
+{
+  /* Process All SDIO Interrupt Sources */
+  SD_ProcessIRQSrc();
+}
+
 
 /**
   * @}
