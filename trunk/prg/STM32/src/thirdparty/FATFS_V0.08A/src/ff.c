@@ -2237,6 +2237,7 @@ FRESULT f_write (
 	BYTE csect;
 
 
+	wcnt= 0;
 	*bw = 0;	/* Initialize byte counter */
 
 	res = validate(fp->fs, fp->id);					/* Check validity of the object */
