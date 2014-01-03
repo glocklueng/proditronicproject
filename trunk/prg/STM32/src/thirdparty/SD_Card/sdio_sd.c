@@ -40,6 +40,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "sdio_sd.h"
+#include "ffconf.h"
 
 /** 
   * @brief  SDIO Static flags, TimeOut, FIFO Address  
@@ -751,8 +752,8 @@ SD_Error SD_GetCardInfo(SD_CardInfo *cardinfo)
     cardinfo->CardCapacity *= (1 << (cardinfo->SD_csd.DeviceSizeMul + 2));
     cardinfo->CardBlockSize = 1 << (cardinfo->SD_csd.RdBlockLen);
 
-    if (cardinfo->CardBlockSize > 512)
-    	cardinfo->CardBlockSize= 512;
+    if (cardinfo->CardBlockSize > _MAX_SS)
+    	cardinfo->CardBlockSize= _MAX_SS;
 
     cardinfo->CardCapacity *= cardinfo->CardBlockSize;
   }
