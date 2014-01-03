@@ -21,6 +21,8 @@
 *********************************************************************************************************/
 
 /* Includes ------------------------------------------------------------------*/
+#include <time.h>
+
 #include "diskio.h"
 #include "sdio_sd.h"
 
@@ -253,8 +255,21 @@ DRESULT disk_ioctl (
 /* 15-11: Hour(0-23), 10-5: Minute(0-59), 4-0: Second(0-29 *2) */                                                                                                                                                                                                                                                
 DWORD get_fattime (void)
 {
-   
-    return 0;
+	DWORD fat_time;
+	time_t currtime;
+	struct tm currtime_tm;
+
+	currtime= time(0);
+	localtime_r(&currtime, &currtime_tm);
+
+	fat_time=  ((currtime_tm.tm_year - 80) & 0x7F) << 25;
+	fat_time|= ((currtime_tm.tm_mon + 1) & 0x0F) << 21;
+	fat_time|= (currtime_tm.tm_mday & 0x1F) << 16;
+	fat_time|= (currtime_tm.tm_hour & 0x1F) << 11;
+	fat_time|= (currtime_tm.tm_min & 0x3F) << 5;
+	fat_time|= currtime_tm.tm_sec & 0x3F;
+
+    return fat_time;
 }
 
 
