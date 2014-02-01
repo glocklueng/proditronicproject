@@ -18,6 +18,10 @@
 
 //-----------------------------------------------------------------------------
 
+#define THERMOMETERS_MAX			16
+#define THERMOMETERS_PER_CHANNEL	4
+
+
 #define THERMOMETER_READ_PERIOD			15 // sec
 #define THERMOMETER_READ_ERROR_MAX		3
 
@@ -47,7 +51,7 @@ typedef struct
 	{
 	k_uchar indx;
 	onewire_handler_s *onewire_handler;
-	k_uchar *dev_id;
+	k_uchar dev_id[6];
 	
 	k_short temp_value;
 	k_short temp_valuex[THERMOMETER_READ_CNTR];

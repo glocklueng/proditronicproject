@@ -31,9 +31,19 @@
 			<locationURI>WORKSPACE_LOC/thirdparty/STM32F10x_StdPeriph_Lib/Libraries/CMSIS/CM3/CoreSupport</locationURI>
 		</link>
 		<link>
+			<name>FATFS</name>
+			<type>2</type>
+			<locationURI>WORKSPACE_LOC/thirdparty/FATFS_V0.08A/src</locationURI>
+		</link>
+		<link>
 			<name>FreeRTOS</name>
 			<type>2</type>
 			<locationURI>WORKSPACE_LOC/thirdparty/FreeRTOS/FreeRTOS/Source</locationURI>
+		</link>
+		<link>
+			<name>SD_Card</name>
+			<type>2</type>
+			<locationURI>WORKSPACE_LOC/thirdparty/SD_Card</locationURI>
 		</link>
 		<link>
 			<name>STM32F10x</name>

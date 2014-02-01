@@ -16,11 +16,22 @@
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 
+
+
+
+
 #define HTR_STATE_IDLE				0x00
 #define HTR_STATE_RUNNING			0x01
 #define HTR_STATE_					0x02
 #define HTR_STATE_			0x03
 #define HTR_STATE_			0x04
+
+
+#define HTR_PID_STATE_IDLE				0x00
+#define HTR_PID_STATE_HEATING			0x01
+#define HTR_PID_STATE_HEATING_MAX		0x02
+#define HTR_PID_STATE_OVERHEATING		0x03
+#define HTR_PID_STATE_FULLTHR_LIMITER	0x04
 
 
 //-----------------------------------------------------------------------------
@@ -60,6 +71,9 @@ typedef struct
 
 	k_long temp_zadana;
 	k_long temp_offset; // korekta temperatury
+	k_long temp_current;
+
+	k_uchar pid_state;
 
 	PID_data_s PID_data;
 
