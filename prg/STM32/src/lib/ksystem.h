@@ -7,6 +7,17 @@
 
 //------------------------------------------------------------------------------
 
+#define FALSE	0
+#define false	0
+#define TRUE	1
+#define true	1
+
+
+
+
+
+//------------------------------------------------------------------------------
+
 typedef struct
 	{
 	unsigned char active;
@@ -23,7 +34,7 @@ typedef struct
 
 //------------------------------------------------------------------------------
 
-#define KTIMERLST_NREPEAT_MAX	10
+#define KTIMERLST_NREPEAT_MAX	3
 
 typedef struct
 	{
