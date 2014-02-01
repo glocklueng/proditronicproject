@@ -20,6 +20,12 @@
 
 //------------------------------------------------------------------------------
 
+#define ONE_WIRE_CMD_SKIP_ROM			0xCC
+#define ONE_WIRE_CMD_MATCH_ROM			0x55
+#define ONE_WIRE_CMD_READ_ROM			0x33
+#define ONE_WIRE_CMD_SEARCH_ROM			0xF0
+
+//------------------------------------------------------------------------------
 #define ONEWIRE_DEV_ID_LENGTH					6
 
 #define ONEWIRE_PULSE_WIDTH_RESET_LO			(int)480
@@ -62,6 +68,9 @@ void onewire_write_byte(onewire_handler_s *onewire_handler, k_uchar byte);
 void onewire_write_byte_pullup(onewire_handler_s *onewire_handler, k_uchar byte); // po wys³aniu bajtu za³¹cza strong pullup
 
 k_uchar onewire_read_byte(onewire_handler_s *onewire_handler);
+
+k_uchar onewire_dev_search_first(onewire_handler_s *onewire_handler, k_uchar *dev_id, k_uchar dev_family);
+k_uchar onewire_dev_search_next(onewire_handler_s *onewire_handler, k_uchar *dev_id);
 
 void onewire_crc8(unsigned char *crc8, unsigned char value);
 
