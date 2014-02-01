@@ -45,8 +45,8 @@ k_uchar therm_ds18b20_conversion_start(onewire_handler_s *onewire_handler, k_uch
 
 		for (x=0;x<ONEWIRE_DEV_ID_LENGTH;x++)
 			{
-			onewire_write_byte(onewire_handler, dev_id[5-x]); 					// dev_id
-			onewire_crc8(&crc8, dev_id[5-x]);
+			onewire_write_byte(onewire_handler, dev_id[x]); 					// dev_id
+			onewire_crc8(&crc8, dev_id[x]);
 			}
 
 		onewire_write_byte(onewire_handler, crc8);
@@ -92,8 +92,8 @@ k_uchar therm_ds18b20_temperature_read(onewire_handler_s *onewire_handler, k_uch
 
 		for (x=0;x<ONEWIRE_DEV_ID_LENGTH;x++)
 			{
-			onewire_write_byte(onewire_handler, dev_id[5-x]); 			// dev_id
-			onewire_crc8(&crc8, dev_id[5-x]);
+			onewire_write_byte(onewire_handler, dev_id[x]); 			// dev_id
+			onewire_crc8(&crc8, dev_id[x]);
 			}
 
 		onewire_write_byte(onewire_handler, crc8);
