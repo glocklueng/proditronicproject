@@ -47,10 +47,13 @@ extern xQueueHandle temp_pid_queue;
 extern wdlist_s heater_list;
 extern unsigned char *cmd_inter_strtok_del;
 
+extern uint16_t *thermometer_id_crc8_tab;
+extern thermometer_s *thermometer_ptr_tab[THERMOMETERS_MAX];
+
 //-----------------------------------------------------------------------------
 
 char debug_txt[17];
-char dev_id_str[13];
+char dev_id_str[17];
 char dbgtmp[3];
 float temp_dbg;
 
@@ -71,7 +74,9 @@ void prvOneWireTask(void *pvParameters)
 	float temp_avr_f;
 	k_short temp_s, temp_avr;
 
+	k_uchar chno;
 	int x;
+
 	//char test= 0;
 
 
@@ -111,6 +116,137 @@ void prvOneWireTask(void *pvParameters)
 	onewire_chnlst[3].chn_no= 3;
 	onewire_bus_init(&onewire_chnlst[3]);
 
+/*
+	for (x=0;x<THERMOMETERS_MAX;x++)
+		{
+		k_uchar *idptr= (k_uchar *)thermometer_id_crc8_tab + (x>>1)*4 + (x&0x00000001);
+		printf("%08X %02X\n", idptr, *idptr);
+		}
+*/
+
+	// znajdz termometry na magistrali
+
+	for (chno=0;chno<ONEWIRE_NBUS;chno++)
+		{
+		k_uchar therm_found;
+		k_uchar therm_indx= 0;
+		k_uchar dev_id[8];
+		k_uchar crc_tab[THERMOMETERS_PER_CHANNEL];
+
+		thermometer_s *therm_new;
+		wdlist_entry_s *first_on_bus= NULL;
+
+
+		printf("1wire chn[%d] searching...\n", chno);
+
+		// wyszukiwanie
+
+		therm_found= onewire_dev_search_first(&onewire_chnlst[chno], dev_id, DS18B20_FAMILY_CODE);
+		if (!therm_found)
+			continue;
+
+		do
+			{
+			dev_id_str[0]= 0x00;
+			for (x=0;x<8;x++)
+				{
+				sprintf(dbgtmp, "%02X", dev_id[x]);
+				strcat(dev_id_str, dbgtmp);
+				}
+			printf("  found: %s\n", dev_id_str);
+
+
+			therm_new= (thermometer_s *)malloc(sizeof(thermometer_s));
+			therm_new->indx= 0xFF;
+			therm_new->onewire_handler= &onewire_chnlst[chno];
+			therm_new->temp_vaild= false;
+			therm_new->temp_read_error_cntr= 0;
+			therm_new->error_code= 0;
+			therm_new->temp_read_0x0550_cntr= 0;
+			therm_new->temp_debug_f= false;
+			memcpy(therm_new->dev_id, &dev_id[1], 6);
+			wdlist_append(&thermometer_list, (void *)therm_new);
+
+			crc_tab[therm_indx]= dev_id[7];
+
+			if (!first_on_bus)
+				first_on_bus= thermometer_list.last_entry;
+
+			therm_indx+= 1;
+			msleep(10);
+
+			} while (onewire_dev_search_next(&onewire_chnlst[chno], dev_id) && (therm_indx < THERMOMETERS_PER_CHANNEL));
+
+
+		// przypisywanie
+
+		if (therm_indx)
+			{
+			k_uchar slot_busy= 0x00;
+
+			// sprawdzam czy termometr ju¿ wczesniej znany
+
+			therm_indx= 0;
+			list_entry= first_on_bus;
+			while (list_entry)
+				{
+				therm_curr= (thermometer_s *)list_entry->data;
+
+				for (x=0;x<THERMOMETERS_PER_CHANNEL;x++)
+					{
+					k_uchar *crcptr= (k_uchar *)thermometer_id_crc8_tab + ((THERMOMETERS_PER_CHANNEL * chno) + x >> 1)*4 + (x&0x00000001);
+					if (crc_tab[therm_indx] == *crcptr)
+						{
+						// wykryto wczesniej znany termometr
+						slot_busy|= 1 << x;
+						therm_curr->indx= (chno << 4) | x;
+						thermometer_ptr_tab[THERMOMETERS_PER_CHANNEL * chno + x]= therm_curr;
+						break;
+						}
+
+					} // for (x=0;x<THERMOMETERS_PER_CHANNEL;x++)
+
+				therm_indx+= 1;
+				list_entry= list_entry->next;
+				} // while (list_entry)
+
+
+			// sprawdzam, ktore termometry nie zostaly przypisane do slotow
+
+			therm_indx= 0;
+			list_entry= first_on_bus;
+			while (list_entry)
+				{
+				therm_curr= (thermometer_s *)list_entry->data;
+
+				if (therm_curr->indx == 0xFF)
+					{
+					// znajdz wolny slot
+					for (x=0;x<THERMOMETERS_PER_CHANNEL;x++)
+						{
+						if (!(slot_busy & (1 << x)))
+							{
+							// zastapiono termometr nowym
+							k_uchar *thcrc;
+							slot_busy|= 1 << x;
+							therm_curr->indx= (chno << 4) | x;
+							thermometer_ptr_tab[THERMOMETERS_PER_CHANNEL * chno + x]= therm_curr;
+
+							thcrc= (k_uchar *)thermometer_id_crc8_tab + (((THERMOMETERS_PER_CHANNEL * chno) + x) >> 1)*4 + (x & 1);
+							STM32_BKP_REG_BYTE_WR(thcrc, crc_tab[therm_indx]);
+							break;
+							} // if (!(slot_busy & (1 << x)))
+						} // for (x=0;x<THERMOMETERS_PER_CHANNEL;x++)
+					} // if (therm_curr->indx == 0xFF)
+
+				therm_indx+= 1;
+				list_entry= list_entry->next;
+				} // while (list_entry)
+
+			} // if (therm_indx)
+
+		} // for (chno=0;chno<ONEWIRE_NBUS;chno++)
+
 
 	list_entry= thermometer_list.first_entry;
 	while (list_entry)
@@ -124,7 +260,7 @@ void prvOneWireTask(void *pvParameters)
 			strcat(dev_id_str, dbgtmp);
 			}
 
-		printf("<TRM> dev[%02d]: 1wire chn[%d] id[%s]\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str);
+		printf("<TRM> dev[%02X]: 1wire chn[%d] id[%s] %08X\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str, therm_curr);
 
 		list_entry= list_entry->next;
 		}
@@ -136,8 +272,31 @@ void prvOneWireTask(void *pvParameters)
 	while (list_entry)
 		{
 		heater_s *heater= (heater_s *)list_entry->data;
+		k_uchar channel;
+		k_uchar slot;
+		k_uchar indx;
 
-		printf("<HTR> dev[%02d]: therm[%02d]\n", heater->indx, heater->thermometer->indx);
+		// przejscie z indeksow na wskazniki !
+
+		channel= ((uint32_t)heater->thermometer >> 4) & 0x0F;
+		slot= (uint32_t)heater->thermometer & 0x0F;
+
+		indx= (k_uchar)heater->thermometer;
+
+		if ((channel < ONEWIRE_NBUS) && (slot < THERMOMETERS_PER_CHANNEL))
+			{
+			heater->thermometer= thermometer_ptr_tab[THERMOMETERS_PER_CHANNEL * channel + slot];
+
+			if (heater->thermometer)
+				printf("<HTR> dev[%02d]: therm[%02X]\n", heater->indx, heater->thermometer->indx);
+			else
+				printf("<HTR> dev[%02d]: therm[%02X] not found\n", heater->indx, indx);
+			}
+		else
+			{
+			heater->thermometer= NULL;
+			printf("<HTR> dev[%02d]: therm[%08X] index overrange\n", heater->indx);
+			}
 
 		list_entry= list_entry->next;
 		}
@@ -159,8 +318,6 @@ void prvOneWireTask(void *pvParameters)
 	while (1)
 		{
 
-
-		//msleep(3000);
 
 		if (list_entry == NULL)
 			{
@@ -211,7 +368,6 @@ void prvOneWireTask(void *pvParameters)
 
 
 		owire_resp= therm_ds18b20_conversion_start(therm_curr->onewire_handler, therm_curr->dev_id);
-//		owire_resp= therm_ds18b20_conversion_start(therm_curr->onewire_handler, NULL);
 
 		if (owire_resp != 0x00)
 			{
@@ -236,7 +392,6 @@ void prvOneWireTask(void *pvParameters)
 
 
 		owire_resp= therm_ds18b20_temperature_read(therm_curr->onewire_handler, therm_curr->dev_id, &temp_read);
-//		owire_resp= therm_ds18b20_temperature_read(therm_curr->onewire_handler, NULL, &temp_read);
 
 		if (therm_curr->temp_debug_f)
 			temp_read= therm_curr->temp_debug_value;
@@ -313,9 +468,9 @@ void prvOneWireTask(void *pvParameters)
 				xSemaphoreGive(thermometer_sem);
 
 				if (!therm_curr->temp_debug_f)
-					printf("<TRM> dev[%02d]: chn[%d] id[%s] t=%f tavrg=%f\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str, temp_dbg, temp_avr_f);
+					printf("<TRM> dev[%02X]: chn[%d] id[%s] t=%f tavrg=%f\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str, temp_dbg, temp_avr_f);
 				else
-					printf("<TRM> dev[%02d]: chn[%d] id[%s] t=%f tavrg=%f FORCED\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str, temp_dbg, temp_avr_f);
+					printf("<TRM> dev[%02X]: chn[%d] id[%s] t=%f tavrg=%f FORCED\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str, temp_dbg, temp_avr_f);
 
 				} // prawid³owy odczyt temperatury
 			else
@@ -407,7 +562,7 @@ void prvOneWireTask(void *pvParameters)
 				xSemaphoreGive(thermometer_sem);
 				}
 
-			printf("<ERR><TRM> dev[%02d]: chn[%d] id[%s] ERR[%02X] valid[%d] RAW[%04X]\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str, therm_curr->error_code, therm_curr->temp_vaild, temp_read);
+			printf("<ERR><TRM> dev[%02X]: chn[%d] id[%s] ERR[%02X] valid[%d] RAW[%04X]\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str, therm_curr->error_code, therm_curr->temp_vaild, temp_read);
 
 			} // if (therm_curr->error_code)
 
@@ -530,14 +685,14 @@ void cmdline_thermometer_temp_set(unsigned char *param)
 						{
 						therm->temp_debug_f= false;
 
-						printf("<TRM> dev[%02d] set to: real value\n", therm->indx);
+						printf("<TRM> dev[%02X] set to: real value\n", therm->indx);
 						}
 					else
 						{
 						therm->temp_debug_value= ((paramsval[0] / 1000) << 4) | ((k_short)((float)(paramsval[0] % 1000) / 1000.0 * 16) & 0xF);
 						therm->temp_debug_f= true;
 
-						printf("<TRM> dev[%02d] set to value: %2.3f\n", therm->indx, (float)(paramsval[0] / 1000.0));
+						printf("<TRM> dev[%02X] set to value: %2.3f\n", therm->indx, (float)(paramsval[0] / 1000.0));
 						}
 
 					}

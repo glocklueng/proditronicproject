@@ -25,7 +25,7 @@ unsigned char cmd_pos;
 
 wdlist_s cmdInterpreter_list;
 
-unsigned char *cmd_inter_strtok_del= " \t";
+unsigned char *cmd_inter_strtok_del= " -:\t";
 
 
 //-----------------------------------------------------------------------------
@@ -35,7 +35,6 @@ typedef struct
 
 	k_uchar *cmdstr;
 	void (*funcptr)(unsigned char *param);
-
 
 	} cmd_func_s;
 
@@ -79,12 +78,10 @@ void prvCmdInterpreterTask(void *pvParameters)
 	unsigned char cmd_buff[CONSOLE_BUFFER_SIZE];
 	unsigned char *tokptr;
 
-
 	msleep(3000);
 
 	cmd_buff_ptr= cmd_buff;
 	cmd_pos= 0;
-
 
 	while (1)
 		{
@@ -98,8 +95,6 @@ void prvCmdInterpreterTask(void *pvParameters)
 			executeCmdLine(tokptr);
 
 		} // while (1)
-
-
 
 	}
 
@@ -159,7 +154,6 @@ int getCmdLine(unsigned char *cmd_buff)
 					*cmd_buff_ptr= 0x00;
 					result= 0x0D0D;
 					}
-
 				}
 			else
 				{

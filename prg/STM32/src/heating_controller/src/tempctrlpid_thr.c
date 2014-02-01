@@ -1,6 +1,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
+
+
+#include "stm32f10x.h"
+#include "sdio_sd.h"
+#include "ff.h"
 
 
 #include <FreeRTOS.h>
@@ -18,8 +24,8 @@
 //-----------------------------------------------------------------------------
 
 // PID wspó³czynniki
-const k_long Kp_def= 32000;			// 10,000
-const k_long Ki_def= 400;			// 0,010
+const k_long Kp_def= 14000;			// 16,000 ok
+const k_long Ki_def= 300;			// 0,010			400 -ok
 const k_long Kd_def= 12000;			// 10,000
 
 // nastawy min, max
@@ -29,7 +35,7 @@ const k_long Kd_def= 12000;			// 10,000
 
 
 #define PWM_WARM_DOWN_FACTOR		200			// [0,1%]
-#define PWM_WARM_CONST_FACTOR		400			// [0,1%]
+#define PWM_WARM_CONST_FACTOR		500			// [0,1%]
 
 
 
@@ -38,8 +44,9 @@ const k_long Kd_def= 12000;			// 10,000
 #define PWM_DUTY_RATIO_MAX_DEFAULT		1000
 #define PWM_DUTY_RATIO_CUTOFF			350
 
-#define PWM_MAX_THROTTLE_TIMEOUT		480				// sec
+#define PWM_MAX_THROTTLE_TIMEOUT		600				// sec
 
+#define LOGFILE_BUFFER_LENGTH			256
 
 //#define PWM_CYCLE_TICKS			(uint16_t)(PWM_PERIOD * PWM_TIMER_FREQ)
 //#define	PWM_PID_RATIO			(float)((float)PWM_CYCLE_TICKS / (float)PID_REG_MAX)
@@ -62,8 +69,16 @@ extern unsigned char *cmd_inter_strtok_del;
 
 
 
+
+
 int pwm_duty_ratio_max;
 k_long Kp, Ki, Kd;
+
+FATFS fs;
+FIL fsrc;
+bool logfile_open_f;
+struct tm currtime_tm;
+
 
 
 //-----------------------------------------------------------------------------
@@ -71,7 +86,13 @@ k_long Kp, Ki, Kd;
 k_long temp_pid_process(PID_data_s *PID_data, k_long uchyb);
 k_long pwm_channel_init(heater_ctrl_handler_s *heater_ctrl_handler);
 
+void tempctrl_write2logfile();
 
+
+
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+/*
 void led_switch()
 	{
 	static char ledstate= 0;
@@ -88,10 +109,8 @@ void led_switch()
 		}
 
 	}
+*/
 
-
-//-----------------------------------------------------------------------------
-//-----------------------------------------------------------------------------
 
 void prvTempCtrlPIDTask(void *pvParameters)
 	{
@@ -111,7 +130,9 @@ void prvTempCtrlPIDTask(void *pvParameters)
 	portTickType ticks_prev;
 	k_ulong time_elapsed_sec;
 
-	//k_uchar
+	time_t currtime;
+	char conbuffer[32];
+
 
 
 	pwm_duty_ratio_max= PWM_DUTY_RATIO_MAX_DEFAULT;
@@ -120,15 +141,9 @@ void prvTempCtrlPIDTask(void *pvParameters)
 	Ki= Ki_def;
 	Kd= Kd_def;
 
+	logfile_open_f= false;
 
 
-/*
-	heater_ctrl_chnlst[0].peripheral_addr= (uint32_t)GPIOB;
-	heater_ctrl_chnlst[0].ctrl_pin= GPIO_Pin_1;
-	heater_ctrl_chnlst[0].period= PWM_PERIOD;
-	heater_ctrl_chnlst[0].pwm_chn= 4;
-	pwm_channel_init(&heater_ctrl_chnlst[0]);
-*/
 
 
 	heater_ctrl_chnlst[0].peripheral_addr= (uint32_t)GPIOB;
@@ -157,6 +172,15 @@ void prvTempCtrlPIDTask(void *pvParameters)
 	heater_ctrl_chnlst[3].pwm_chn= 4;
 	pwm_channel_init(&heater_ctrl_chnlst[3]);
 */
+
+
+
+
+
+	msleep(5000);
+
+
+
 
 
 
@@ -192,7 +216,10 @@ void prvTempCtrlPIDTask(void *pvParameters)
 		time_elapsed_sec/= configTICK_RATE_HZ;
 		ticks_prev= ticks_curr;
 
-
+		currtime= time(0);
+		localtime_r(&currtime, &currtime_tm);
+		strftime(conbuffer, 32, "%Y-%m-%d %H:%M:%S", &currtime_tm);
+		printf("<TIME> %s\n", conbuffer);
 
 
 
@@ -203,7 +230,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 			heater= (heater_s *)heater_entry->data;
 
 			thermometer= heater->thermometer;
-			heater_ctrl_handler= heater->heater_ctrl_handler;
+			heater_ctrl_handler= thermometer ? heater->heater_ctrl_handler : NULL;
 
 
 
@@ -225,10 +252,6 @@ void prvTempCtrlPIDTask(void *pvParameters)
 
 				case GLOBAL_MODE_HEATING:
 					{
-
-
-
-
 
 
 
@@ -262,6 +285,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 					
 					// wy³¹czenie timera
 					heater->max_throttle_timeout_active= false;
+					heater->max_throttle_timeout= 0;
 
 
 
@@ -276,7 +300,9 @@ void prvTempCtrlPIDTask(void *pvParameters)
 
 					heater_temp*= 1000;
 					heater_temp>>= 4;
-					
+
+					heater->temp_current= heater_temp;
+
 					if (heater->temp_offset != 0)
 						heater_temp+= heater->temp_offset;
 
@@ -292,18 +318,25 @@ void prvTempCtrlPIDTask(void *pvParameters)
 
 
 					if (duty_ratio > pwm_duty_ratio_max)
+						{
 						duty_ratio= pwm_duty_ratio_max;
+						heater->pid_state= HTR_PID_STATE_HEATING_MAX;
+						}
 					else
 					if (duty_ratio < PWM_DUTY_RATIO_CUTOFF)
 						{
 						printf("<HTR> dev[%02d]: CLOSED\n", heater->indx);
 						duty_ratio= 0;
+						heater->pid_state= HTR_PID_STATE_IDLE;
 						}
+					else
+						heater->pid_state= HTR_PID_STATE_HEATING;
 
 					if ((duty_ratio > 0) && (temp_uchyb <= 0))
 						{
 						printf("<HTR> dev[%02d]: CLOSED, OVERHEATING\n", heater->indx);
 						duty_ratio= 0;
+						heater->pid_state= HTR_PID_STATE_OVERHEATING;
 						}
 
 
@@ -314,6 +347,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 						{
 						// wy³¹czenie timera
 						heater->max_throttle_timeout_active= false;
+						heater->max_throttle_timeout= 0;
 						printf("<HTR> dev[%02d]: full throttle timer stop\n", heater->indx);
 						}
 
@@ -329,8 +363,9 @@ void prvTempCtrlPIDTask(void *pvParameters)
 
 						if (heater->max_throttle_timeout == 0)
 							{
-							printf("<HTR> dev[%02d]: full throttle timer elapsed\n", heater->indx);
+							printf("<HTR> dev[%02d]: full throttle limiter\n", heater->indx);
 							duty_ratio= PWM_WARM_CONST_FACTOR;
+							heater->pid_state= HTR_PID_STATE_FULLTHR_LIMITER;
 							}
 						else
 							printf("<HTR> dev[%02d]: full throttle timer: %03d\n", heater->indx, heater->max_throttle_timeout);
@@ -346,7 +381,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 						}
 
 
-					printf("<HTR> dev[%02d]: therm[%02d] tset=%2.3f toff=%2.3f tdiff=%2.3f\n", heater->indx, heater->thermometer->indx, (float)heater->temp_zadana/1000, (float)heater->temp_offset/1000, (float)temp_uchyb/1000);
+					printf("<HTR> dev[%02d]: therm[%02X] tset=%2.3f toff=%2.3f tdiff=%2.3f\n", heater->indx, heater->thermometer->indx, (float)heater->temp_zadana/1000, (float)heater->temp_offset/1000, (float)temp_uchyb/1000);
 					printf("<HTR> dev[%02d]: PID: %4d %4d %4d \n", heater->indx, heater->PID_data.P/1000, heater->PID_data.I/1000, heater->PID_data.D/1000);
 					printf("<HTR> dev[%02d]: PID param: %05d  duty_ratio: %04d\n", heater->indx, ctrl_param, duty_ratio);
 
@@ -369,8 +404,8 @@ void prvTempCtrlPIDTask(void *pvParameters)
 				} // if (thermometer)
 			else
 				{
-
 				// brak zdefiniowanego termometru dla grzejnika
+
 
 
 				}
@@ -378,7 +413,13 @@ void prvTempCtrlPIDTask(void *pvParameters)
 
 
 			heater_entry= heater_entry->next;
-			}
+
+			} //while (heater_entry)
+
+
+		if (queue_dta == 0x00)
+			tempctrl_write2logfile();
+
 
 
 		} // while (1)
@@ -617,6 +658,98 @@ k_long pwm_channel_set(heater_ctrl_handler_s *heater_ctrl_handler, uint16_t duty
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
+
+void tempctrl_write2logfile()
+	{
+	FRESULT res;
+	UINT br;
+	wdlist_entry_s *heater_entry= NULL;
+	heater_s *heater;
+
+	static u8 buffer_tmp[64];
+	static u8 logfile_buffer[LOGFILE_BUFFER_LENGTH];
+
+
+	if (!logfile_open_f)
+		{
+
+		if (SD_Detect() == SD_PRESENT)
+			{
+			res= f_mount(0, &fs);
+
+			sprintf(logfile_buffer, "0:/");
+			strftime(buffer_tmp, 16, "%Y%m%d", &currtime_tm);
+			strcat(logfile_buffer, buffer_tmp);
+			strcat(logfile_buffer, ".csv");
+			res= f_open(&fsrc, logfile_buffer, FA_OPEN_ALWAYS | FA_WRITE);
+			printf("f_open: %s\n", (res == FR_OK) ? "success" : "fail");
+
+			if (res == FR_OK)
+				{
+				res= f_lseek(&fsrc, f_size(&fsrc));
+				printf("f_lseek: %s\n", (res == FR_OK) ? "success" : "fail");
+
+				logfile_open_f= true;
+				}
+			}
+
+		} // if (!logfile_open_f)
+
+
+	if (!logfile_open_f)
+		return ;
+
+	if (SD_Detect() != SD_PRESENT)
+		{
+		printf("SD CARD: not present\n");
+
+		logfile_open_f= false;
+		f_close(&fsrc);
+
+		f_mount(0, NULL); // umount
+
+		return ;
+		}
+
+	strftime(logfile_buffer, LOGFILE_BUFFER_LENGTH, "%H:%M:%S", &currtime_tm);
+
+	sprintf(buffer_tmp, ";%d", main_settings.global_mode);
+	strcat(logfile_buffer, buffer_tmp);
+
+	heater_entry= heater_list.first_entry;
+	while (heater_entry)
+		{
+		heater= (heater_s *)heater_entry->data;
+
+		sprintf(buffer_tmp, ";%d;%d;%d;%d;%2.3f;%2.3f;%2.3f;%d;%d;%d;%d",
+			heater->state,
+			heater->PID_data.P/1000,
+			heater->PID_data.I/1000,
+			heater->PID_data.D/1000,
+			(float)heater->temp_zadana/1000,
+			(float)heater->temp_offset/1000,
+			(float)heater->temp_current/1000,
+			heater->pid_state,
+			heater->heater_ctrl_handler->duty_ratio,
+			heater->max_throttle_timeout_active,
+			heater->max_throttle_timeout
+			);
+
+		strcat(logfile_buffer, buffer_tmp);
+
+		heater_entry= heater_entry->next;
+		}
+
+//	printf("%s\n", logfile_buffer);
+	strcat(logfile_buffer, "\r\n");
+
+	res= f_write(&fsrc, logfile_buffer, strlen(logfile_buffer), &br);
+	f_sync(&fsrc);
+
+	}
+
+//-----------------------------------------------------------------------------
+
 
 /*
 

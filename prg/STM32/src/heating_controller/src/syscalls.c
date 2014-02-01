@@ -8,9 +8,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/unistd.h>
+#include <sys/time.h>
 
 #include "stm32f10x.h"
 #include "serial_port.h"
+#include "stm32rtc.h"
 #include "platform_config.h"
 
 
@@ -42,6 +44,11 @@ int _close(int file)
   return -1;
 }
 
+int _open(int file)
+{
+  return -1;
+}
+
 int _fstat(int file, struct stat *st)
 {
   st->st_mode = S_IFCHR;
@@ -65,7 +72,6 @@ int _read(int file, char *ptr, int len)
 
 int _write(int file, char *ptr, int len)
 	{
-	int n;
 
 	if (!ptr || (len < 1))
 		return -1;
@@ -89,6 +95,18 @@ int _write(int file, char *ptr, int len)
 		} // switch (file)
 
 	return len;
+	}
+
+int _gettimeofday(struct timeval *tv, struct timezone *tz)
+	{
+
+	if (tv)
+		{
+		tv->tv_sec= stm32rtc_get();
+		tv->tv_usec= 0;
+		}
+
+	return 0;
 	}
 
 void abort(void)

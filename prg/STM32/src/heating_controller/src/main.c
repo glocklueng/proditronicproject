@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "stm32f10x.h"
 
@@ -21,9 +22,12 @@
 
 #include "FreeRTOSConfig.h"
 
+
 #include "serial_port.h"
 #include "ksystem.h"
 #include "wdlist.h"
+#include "stm32rtc.h"
+#include "sdio_sd.h"
 
 
 #include "global.h"
@@ -35,7 +39,7 @@
 #include "cmd_interpreter.h"
 
 
-unsigned char konfiguracja[512] __attribute__ ((section (".flash_config_data")));
+//unsigned char konfiguracja[512] __attribute__ ((section (".flash_config_data")));
 
 
 #define mainECHO_TASK_PRIORITY					( tskIDLE_PRIORITY + 1 )
@@ -56,6 +60,10 @@ void USART_Configuration(void);
 
 static void prvUSARTEchoTask(void *pvParameters);
 
+void cmdline_date_set(unsigned char *param);
+void cmdline_time_set(unsigned char *param);
+
+
 
 #define mainBLOCK_Q_PRIORITY				( tskIDLE_PRIORITY + 2 )
 
@@ -69,7 +77,6 @@ main_settings_s main_settings;
 onewire_handler_s onewire_chnlst[ONEWIRE_NBUS];
 heater_ctrl_handler_s heater_ctrl_chnlst[HEATER_NUMBER];
 
-
 wdlist_s thermometer_list;
 xSemaphoreHandle thermometer_sem;
 
@@ -77,29 +84,35 @@ wdlist_s heater_list;
 xQueueHandle temp_pid_queue;
 
 
+__IO uint32_t *cmos1; // BKP_DR1 - BKP_DR10, 10 rejestrów 16 bitowe
+__IO uint32_t *cmos2; // BKP_DR11 - BKP_DR42, 32 rejestry 16 bitowe
 
 
-const thermometer_cfg_s thermometer_cfg_tab[]=
-	{
 
-	{{0x00, 0x00, 0x04, 0xB1, 0x92, 0x3A}, 0},
-//	{{0x00, 0x00, 0x04, 0xB1, 0x6E, 0x30}, 1},
-//	{{0x00, 0x00, 0x04, 0xB1, 0x8D, 0xB8}, 2},
-//	{{0x00, 0x00, 0x04, 0xB1, 0xD7, 0x6A}, 3},
+extern void SD_LowLevel_Init(void);
+extern unsigned char *cmd_inter_strtok_del;
 
-	};
 
 const heater_cfg_s heater_cfg_tab[]=
 	{
 	// termometr_index,
-	{0},
-	{0},
+	{0x00},
+	{0x10},
 //	{2},
 //	{3},
 
 	};
 
 
+// cmos2
+
+uint16_t *thermometer_id_crc8_tab;			// + 0x00A0
+
+
+
+
+
+thermometer_s *thermometer_ptr_tab[THERMOMETERS_MAX];
 
 
 //------------------------------------------------------------------------------
@@ -128,16 +141,32 @@ int main()
 
 	USART_InitTypeDef USART_InitStructure;
 
+	cmos1= (uint32_t)BKP_BASE + BKP_DR1;
+	cmos2= (uint32_t)BKP_BASE + BKP_DR11;
+
+	thermometer_id_crc8_tab= (uint32_t)BKP_BASE + 0xA0;
+
+
+
+	setenv("TZ","CET-1CEST,M3.5.0/2,M10.5.0/3",1);
+
+
 	GPIO_Configuration();
 	NVIC_Configuration();
 
 	prvSetupHardware();
 
+	stm32rtc_init();
+	SD_LowLevel_Init();
 
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
 
-	//RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
-	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE); // PWM
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);	// ktimerlst_init
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE); 	// PWM
+
+
+
+
+
 
 	USART_InitStructure.USART_BaudRate = 57600;
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
@@ -155,6 +184,8 @@ int main()
 	cmd_interpreter_cmd_append("therm", &cmdline_thermometer_temp_set);
 	cmd_interpreter_cmd_append("pwmmaxduty", &cmdline_heater_pwm_duty_ratio_max_set);
 	cmd_interpreter_cmd_append("pid", &cmdline_pid_set);
+	cmd_interpreter_cmd_append("date", &cmdline_date_set);
+	cmd_interpreter_cmd_append("time", &cmdline_time_set);
 
 
 
@@ -166,6 +197,9 @@ int main()
 	temp_pid_queue= xQueueCreate(1, 1);
 
 
+
+	for (x=0;x<THERMOMETERS_MAX;x++)
+		thermometer_ptr_tab[x]= NULL;
 
 	for (x=0;x<HEATER_NUMBER;x++)
 		heater_ctrl_chnlst[x].peripheral_addr= NULL;
@@ -181,29 +215,27 @@ int main()
 // odczyt konfiguracji
 
 
-	main_settings.global_mode= GLOBAL_MODE_HEATING;
-
-
-	// termometry
-
-	for (x=0;x<(sizeof(thermometer_cfg_tab)/sizeof(thermometer_cfg_s));x++)
+	if (0)//*cmos1 != 0xA5A5)
 		{
-		thermometer_cfg_s *thermometer_cfg= (thermometer_cfg_s *)&thermometer_cfg_tab[x];
-		thermometer_s *therm_new;
+		// utrata danych konfiguracyjnych
 
-		therm_new= (thermometer_s *)malloc(sizeof(thermometer_s));
-		therm_new->indx= x;
-		therm_new->onewire_handler= &onewire_chnlst[thermometer_cfg->chn_no];
-		therm_new->dev_id= thermometer_cfg->dev_id;
-		therm_new->temp_vaild= false;
-		therm_new->temp_read_error_cntr= 0;
-		therm_new->error_code= 0;
-		therm_new->temp_read_0x0550_cntr= 0;
-		therm_new->temp_debug_f= false;
 
-		wdlist_append(&thermometer_list, (void *)therm_new);
 
-		} // thermometer_cfg_tab
+		for (x=0;x<THERMOMETERS_MAX;x++)
+			{
+			k_uchar *idptr= (k_uchar *)thermometer_id_crc8_tab + (x>>1)*4 + (x & 1);
+			STM32_BKP_REG_BYTE_WR(idptr, 0x00);
+			}
+
+
+
+		*cmos1= 0xA5A5;
+		}
+
+
+
+
+	main_settings.global_mode= GLOBAL_MODE_HEATING;
 
 	
 	// grzejniki
@@ -212,25 +244,15 @@ int main()
 		{
 		heater_cfg_s *heater_cfg= (heater_cfg_s *)&heater_cfg_tab[x];
 		heater_s *heater_new;
-		wdlist_entry_s *therm_entry;
-		k_uchar tindx;
-
-
-		tindx= 0;
-		therm_entry= thermometer_list.first_entry;
-
-		while (therm_entry && (tindx < heater_cfg->thermometer_no))
-			{
-			tindx++;
-			therm_entry= therm_entry->next;
-			}
 
 		heater_new= (heater_s *)malloc(sizeof(heater_s));
 		heater_new->indx= x;
-		heater_new->temp_zadana= 22000;
+		heater_new->state= 0x00;
+		heater_new->temp_zadana= 21000;
 		heater_new->temp_offset= 0;
 		heater_new->max_throttle_timeout_active= false;
-		heater_new->thermometer= (therm_entry && (tindx == heater_cfg->thermometer_no)) ? (thermometer_s *)therm_entry->data : NULL;
+		heater_new->max_throttle_timeout= 0;
+		heater_new->thermometer= heater_cfg->thermometer_no; // pocz¹tkowo indeks termometru, potem wskaŸnik
 		heater_new->heater_ctrl_handler= &heater_ctrl_chnlst[x];
 
 		wdlist_append(&heater_list, (void *)heater_new);
@@ -241,10 +263,10 @@ int main()
 
 
 
-	//xTaskCreate(prvUSARTEchoTask, (signed char *)"Echo", configMINIMAL_STACK_SIZE, NULL, mainECHO_TASK_PRIORITY, NULL);
-	xTaskCreate(prvOneWireTask, (signed char *)"1Wire", configMINIMAL_STACK_SIZE, NULL, mainONEWIRE_TASK_PRIORITY, NULL);
-	xTaskCreate(prvTempCtrlPIDTask, (signed char *)"PID", configMINIMAL_STACK_SIZE, NULL, mainTEMPCTRLPID_TASK_PRIORITY, NULL);
-	xTaskCreate(prvCmdInterpreterTask, (signed char *)"CMD", configMINIMAL_STACK_SIZE, NULL, mainTEMPCTRLPID_TASK_PRIORITY, NULL);
+	//xTaskCreate(prvUSARTEchoTask, (signed char *)"Echo", 512, NULL, mainECHO_TASK_PRIORITY, NULL);
+	xTaskCreate(prvOneWireTask, (signed char *)"1Wire", 512, NULL, mainONEWIRE_TASK_PRIORITY, NULL);
+	xTaskCreate(prvTempCtrlPIDTask, (signed char *)"PID", 1024, NULL, mainTEMPCTRLPID_TASK_PRIORITY, NULL);
+	xTaskCreate(prvCmdInterpreterTask, (signed char *)"CMD", 512, NULL, mainTEMPCTRLPID_TASK_PRIORITY, NULL);
 
 
 
@@ -261,7 +283,7 @@ int main()
 void GPIO_Configuration(void)
 	{
 	GPIO_InitTypeDef GPIO_InitStructure;
-/*
+
 //	RCC_APB2PeriphClockCmd( RCC_APB2Periph_GPIOB | RCC_APB2Periph_GPIOC , ENABLE);
 	RCC_APB2PeriphClockCmd( RCC_APB2Periph_GPIOB , ENABLE);
 
@@ -270,7 +292,7 @@ void GPIO_Configuration(void)
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
 	GPIO_Init(GPIOB, &GPIO_InitStructure);
-*/
+
 	}
 
 //------------------------------------------------------------------------------
@@ -299,6 +321,22 @@ void NVIC_Configuration(void)
 	// Enable the TIM2 Interrupt
 	// used by ktimerlst
 	NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+
+
+	// Enable the RTC Interrupt
+	NVIC_InitStructure.NVIC_IRQChannel = RTC_IRQn;
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+	NVIC_Init(&NVIC_InitStructure);
+
+
+	// Enable the SDIO Interrupt
+	NVIC_InitStructure.NVIC_IRQChannel = SDIO_IRQn;
 	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
@@ -406,3 +444,110 @@ void vApplicationStackOverflowHook( xTaskHandle pxTask, signed char *pcTaskName 
 
 //------------------------------------------------------------------------------
 
+void printf_datetime(struct tm *time_tm)
+	{
+	char buffer[30];
+	strftime(buffer, 32, "%Y-%m-%d %H:%M:%S %z %a", time_tm);
+	printf("date: %s\n", buffer);
+	}
+
+//------------------------------------------------------------------------------
+
+void cmdline_date_set(unsigned char *param)
+	{
+	k_uchar nparam= 0;
+
+	const k_uchar max_nparam= 3;
+	k_ulong paramsval[max_nparam];
+
+	time_t currtime;
+	struct tm currtime_tm;
+
+	if (!param)
+		{
+		currtime= time(0);
+		localtime_r(&currtime, &currtime_tm);
+		printf_datetime(&currtime_tm);
+		return;
+		}
+
+	while (param && (nparam < max_nparam))
+		{
+		paramsval[nparam]= atoi(param);
+		nparam++;
+		param= strtok(NULL, cmd_inter_strtok_del);
+		}
+
+	if (nparam == 3)
+		{
+		if ((paramsval[0] >= 2000) && (paramsval[0] < 2100) && (paramsval[1] > 0) && (paramsval[1] <= 12) && (paramsval[2] > 0) && (paramsval[2] <= 31))
+			{
+			currtime= time(0);
+			localtime_r(&currtime, &currtime_tm);
+
+			currtime_tm.tm_year= paramsval[0] - 1900;
+			currtime_tm.tm_mon= paramsval[1] - 1;
+			currtime_tm.tm_mday= paramsval[2];
+
+			currtime= mktime(&currtime_tm);
+			stm32rtc_set(currtime);
+
+			printf_datetime(&currtime_tm);
+			}
+
+		} // if (nparam == 3)
+
+
+	}
+
+//------------------------------------------------------------------------------
+
+void cmdline_time_set(unsigned char *param)
+	{
+	k_uchar nparam= 0;
+
+	const k_uchar max_nparam= 3;
+	k_ulong paramsval[max_nparam];
+
+	time_t currtime;
+	struct tm currtime_tm;
+
+	if (!param)
+		{
+		currtime= time(0);
+		localtime_r(&currtime, &currtime_tm);
+		printf_datetime(&currtime_tm);
+		return;
+		}
+
+	while (param && (nparam < max_nparam))
+		{
+		paramsval[nparam]= atoi(param);
+		nparam++;
+		param= strtok(NULL, cmd_inter_strtok_del);
+		}
+
+	if (nparam == 3)
+		{
+		if ((paramsval[0] >= 0) && (paramsval[0] < 23) && (paramsval[1] >= 0) && (paramsval[1] < 60) && (paramsval[2] >= 0) && (paramsval[2] < 60))
+			{
+			currtime= time(0);
+			localtime_r(&currtime, &currtime_tm);
+
+			currtime_tm.tm_hour= paramsval[0];
+			currtime_tm.tm_min= paramsval[1];
+			currtime_tm.tm_sec= paramsval[2];
+
+			currtime= mktime(&currtime_tm);
+			stm32rtc_set(currtime);
+
+			printf_datetime(&currtime_tm);
+			}
+
+		} // if (nparam == 3)
+
+
+	}
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
