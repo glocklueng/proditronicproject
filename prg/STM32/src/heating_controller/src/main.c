@@ -96,8 +96,8 @@ extern unsigned char *cmd_inter_strtok_del;
 const heater_cfg_s heater_cfg_tab[]=
 	{
 	// termometr_index,
-	{0x00},
-	{0x10},
+	{0x01},
+	{0x01},
 //	{2},
 //	{3},
 
@@ -250,6 +250,11 @@ int main()
 		heater_new->state= 0x00;
 		heater_new->temp_zadana= 21000;
 		heater_new->temp_offset= 0;
+
+		heater_new->temp_prev= 0;
+		heater_new->owp_state= 0x00;
+		heater_new->owp_begin_time= 0;
+
 		heater_new->max_throttle_timeout_active= false;
 		heater_new->max_throttle_timeout= 0;
 		heater_new->thermometer= heater_cfg->thermometer_no; // poczπtkowo indeks termometru, potem wskaünik

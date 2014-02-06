@@ -16,6 +16,8 @@
 #define GLOBAL_MODE_HEATING		0x01
 
 
+
+
 #define GPIOA_CLK_ENABLE_BIT	(1 << 0)
 #define GPIOB_CLK_ENABLE_BIT	(1 << 1)
 #define GPIOC_CLK_ENABLE_BIT	(1 << 2)
