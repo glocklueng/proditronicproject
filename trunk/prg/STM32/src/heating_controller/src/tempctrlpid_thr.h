@@ -72,6 +72,7 @@ typedef struct
 	k_long temp_zadana;
 	k_long temp_offset; // korekta temperatury
 	k_long temp_current;
+	k_long temp_prev;
 
 	k_uchar pid_state;
 
@@ -81,6 +82,11 @@ typedef struct
 
 	bool max_throttle_timeout_active;
 	k_ushort max_throttle_timeout;
+
+	k_uchar owp_state;
+	time_t owp_begin_time;
+	k_long owp_begin_temp;
+
 
 
 	} heater_s;

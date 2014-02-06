@@ -164,6 +164,7 @@ void prvOneWireTask(void *pvParameters)
 			therm_new->error_code= 0;
 			therm_new->temp_read_0x0550_cntr= 0;
 			therm_new->temp_debug_f= false;
+			therm_new->temp_offset= 0;
 			memcpy(therm_new->dev_id, &dev_id[1], 6);
 			wdlist_append(&thermometer_list, (void *)therm_new);
 
@@ -260,7 +261,7 @@ void prvOneWireTask(void *pvParameters)
 			strcat(dev_id_str, dbgtmp);
 			}
 
-		printf("<TRM> dev[%02X]: 1wire chn[%d] id[%s] %08X\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str, therm_curr);
+		printf("<TRM> dev[%02X]: 1wire chn[%d] id[%s]\n", therm_curr->indx, therm_curr->onewire_handler->chn_no, dev_id_str);
 
 		list_entry= list_entry->next;
 		}
@@ -451,10 +452,18 @@ void prvOneWireTask(void *pvParameters)
 				temp_avr_f= (float)temp_s;
 				temp_avr_f/= (float)(THERMOMETER_READ_CNTR + 1);
 				temp_avr_f= round(temp_avr_f);
+
+				if (therm_curr->temp_offset)
+					temp_avr_f+= (float)therm_curr->temp_offset * 16.0 / 1000.0;
+
 				temp_avr= (k_short)temp_avr_f;
 				temp_avr_f/= 16.0;
 
 				temp_dbg= (float)temp_read;
+
+				if (therm_curr->temp_offset)
+					temp_dbg+= (float)therm_curr->temp_offset * 16.0 / 1000.0;
+
 				temp_dbg/= 16.0;
 
 				// wpis

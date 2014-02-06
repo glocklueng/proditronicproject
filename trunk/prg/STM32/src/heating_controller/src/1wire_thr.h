@@ -54,6 +54,7 @@ typedef struct
 	k_uchar dev_id[6];
 	
 	k_short temp_value;
+	k_short temp_offset; // offset temperatury: +/- 1000 => +/- 1.0 C
 	k_short temp_valuex[THERMOMETER_READ_CNTR];
 	bool temp_vaild;
 
