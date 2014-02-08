@@ -39,11 +39,13 @@ const k_long Kd_def= 12000;			// 10,000
 #define PWM_PERIOD						20 				// sec
 #define PWM_TIMER_FREQ					1200			// Hz
 #define PWM_DUTY_RATIO_MAX_DEFAULT		1000
+#define PWM_DUTY_RATIO_MAX				1000
 #define PWM_DUTY_RATIO_CUTOFF			350
 
 #define PWM_MAX_THROTTLE_TIMEOUT		600				// sec
 
 #define MAX_TEMPERATURE					24000
+#define MIN_TEMPERATURE					15000
 
 
 
@@ -232,8 +234,76 @@ void prvTempCtrlPIDTask(void *pvParameters)
 			{
 			heater= (heater_s *)heater_entry->data;
 
-			thermometer= heater->thermometer;
+			thermometer= (heater->thermometer > 0x100) ? heater->thermometer : NULL; // sprawdzam czy zamiast indeksu podstawiono ju¿ wskaŸnik
 			heater_ctrl_handler= thermometer ? heater->heater_ctrl_handler : NULL;
+
+
+			if (thermometer)
+				{
+
+				xSemaphoreTake(thermometer_sem, 0);
+
+				if ((queue_dta == 0x01) || !thermometer->temp_vaild)
+					{
+					// zerowanie, wy³¹cz grzanie
+
+					xSemaphoreGive(thermometer_sem);
+
+					// wy³¹czenie timera
+					heater->max_throttle_timeout_active= false;
+					heater->max_throttle_timeout= 0;
+
+					heater->owp_state= 0x00;
+					heater->owp_begin_time= 0;
+
+
+					// wy³aczam grzanie
+					duty_ratio= 0;
+
+
+					// co z okresowym za³aczeniem ?
+					// co z okresowym za³aczeniem ?
+					// co z okresowym za³aczeniem ?
+
+
+
+
+					if (heater_ctrl_handler->duty_ratio != duty_ratio)
+						pwm_channel_set(heater_ctrl_handler, duty_ratio);
+
+					} // init
+				else
+					xSemaphoreGive(thermometer_sem);
+
+				} // if (thermometer)
+			else
+				{
+				// brak zdefiniowanego termometru dla grzejnika
+				// wy³¹czam grzanie dla danego grzejnika
+
+				// wy³¹czenie timera
+				heater->max_throttle_timeout_active= false;
+				heater->max_throttle_timeout= 0;
+
+				heater->owp_state= 0x00;
+				heater->owp_begin_time= 0;
+
+
+				// wy³aczam grzanie
+				duty_ratio= 0;
+
+				// co z okresowym za³aczeniem ?
+				// co z okresowym za³aczeniem ?
+				// co z okresowym za³aczeniem ?
+
+
+				if (heater_ctrl_handler->duty_ratio != duty_ratio)
+					pwm_channel_set(heater_ctrl_handler, duty_ratio);
+
+				printf("<HTR> dev[%02d]: thermometer not found\n", heater->indx);
+
+				goto prvTempCtrlPIDTask_next_therm;
+				}
 
 
 
@@ -246,10 +316,55 @@ void prvTempCtrlPIDTask(void *pvParameters)
 				case GLOBAL_MODE_IDLE:
 					{
 
-
-
 					// wy³¹czenie timera
 					heater->max_throttle_timeout_active= false;
+					heater->max_throttle_timeout= 0;
+
+
+					xSemaphoreTake(thermometer_sem, 0);
+
+					if (thermometer && (queue_dta == 0x00) && thermometer->temp_vaild)
+						{
+
+						heater_temp= (k_long)thermometer->temp_value;
+						xSemaphoreGive(thermometer_sem);
+
+						heater_temp*= 1000;
+						heater_temp>>= 4;
+
+						if (heater->temp_offset != 0)
+							heater_temp+= heater->temp_offset;
+
+						heater->temp_current= heater_temp;
+
+
+
+						// wy³aczam grzanie
+						duty_ratio= 0;
+
+
+						// co z okresowym za³aczeniem ?
+						// co z okresowym za³aczeniem ?
+						// co z okresowym za³aczeniem ?
+
+
+						// zabezpieczenie przed nadmiernym spadkiem temperatury, nawet przy otwartym oknie
+						if (heater->temp_current < MIN_TEMPERATURE)
+							{
+							printf("<HTR> dev[%02d]: OPENED, MIN_TEMPERATURE tmin=%2.3f\n", heater->indx, (float)MIN_TEMPERATURE/1000.0);
+							duty_ratio= PWM_DUTY_RATIO_MAX;
+							}
+
+
+						if (heater_ctrl_handler->duty_ratio != duty_ratio)
+							pwm_channel_set(heater_ctrl_handler, duty_ratio);
+
+
+						} // if (thermometer && (queue_dta == 0x00) && thermometer->temp_vaild)
+					else
+						xSemaphoreGive(thermometer_sem);
+
+
 
 
 					break;
@@ -260,191 +375,148 @@ void prvTempCtrlPIDTask(void *pvParameters)
 				case GLOBAL_MODE_HEATING:
 					{
 
+					xSemaphoreTake(thermometer_sem, 0);
 
-					if (thermometer)
+					if (thermometer && (queue_dta == 0x00) && thermometer->temp_vaild)
 						{
 
-						xSemaphoreTake(thermometer_sem, 0);
+						heater_temp= (k_long)thermometer->temp_value;
+						xSemaphoreGive(thermometer_sem);
 
 
-						if ((queue_dta == 0x01) || !thermometer->temp_vaild)
+						heater_temp*= 1000;
+						heater_temp>>= 4;
+
+						if (heater->temp_offset != 0)
+							heater_temp+= heater->temp_offset;
+
+						heater->temp_current= heater_temp;
+						temp_uchyb= heater->temp_zadana - heater_temp;
+
+						if (heater->PID_data.uchyb_prev == 0x80000000)
+							heater->PID_data.uchyb_prev= temp_uchyb;
+
+						ctrl_param= temp_pid_process(&heater->PID_data, temp_uchyb);
+
+						duty_ratio= (uint16_t)round((((float)ctrl_param / (float)PID_REG_MAX) * pwm_duty_ratio_max));
+
+
+
+						if (duty_ratio > pwm_duty_ratio_max)
 							{
-							// zerowanie, wy³¹cz grzanie
+							duty_ratio= pwm_duty_ratio_max;
+							heater->pid_state= HTR_PID_STATE_HEATING_MAX;
+							}
+						else
+						if (duty_ratio < PWM_DUTY_RATIO_CUTOFF)
+							{
+							printf("<HTR> dev[%02d]: CLOSED\n", heater->indx);
+							duty_ratio= 0;
+							heater->pid_state= HTR_PID_STATE_IDLE;
+							}
+						else
+							heater->pid_state= HTR_PID_STATE_HEATING;
 
-							xSemaphoreGive(thermometer_sem);
+						if ((duty_ratio > 0) && (temp_uchyb <= 0))
+							{
+							printf("<HTR> dev[%02d]: CLOSED, OVERHEATING\n", heater->indx);
+							duty_ratio= 0;
+							heater->pid_state= HTR_PID_STATE_OVERHEATING;
+							}
 
+
+						// zabezpieczenie przed ci¹g³ym za³¹czeniem grzania na full, w przypadku, gdy np. wy³aczony jest piec
+						// jesli czas otwarcia na full (np. > 800) trwa powyzej x sekund, to za³¹czyc pwm na podtrzymanie
+
+						if ((heater->max_throttle_timeout_active == true) && (duty_ratio < 800))
+							{
+							// wy³¹czenie timera
+							heater->max_throttle_timeout_active= false;
+							heater->max_throttle_timeout= 0;
+							printf("<HTR> dev[%02d]: full throttle timer stop\n", heater->indx);
+							}
+
+						if (heater->max_throttle_timeout_active == true)
+							{
+							if (heater->max_throttle_timeout != 0)
+								{
+								if (heater->max_throttle_timeout >= time_elapsed_sec)
+									heater->max_throttle_timeout-= time_elapsed_sec;
+								else
+									heater->max_throttle_timeout= 0;
+								}
+
+							if (heater->max_throttle_timeout == 0)
+								{
+								printf("<HTR> dev[%02d]: full throttle limiter\n", heater->indx);
+								duty_ratio= PWM_WARM_CONST_FACTOR;
+								heater->pid_state= HTR_PID_STATE_FULLTHR_LIMITER;
+								}
+							else
+								printf("<HTR> dev[%02d]: full throttle timer: %03d\n", heater->indx, heater->max_throttle_timeout);
+							}
+
+						if ((heater->owp_state == 0x00) && (duty_ratio > 900) && (heater->max_throttle_timeout_active == false))
+							{
+							// za³¹czenie timera
+							heater->max_throttle_timeout= PWM_MAX_THROTTLE_TIMEOUT;
+							heater->max_throttle_timeout_active= true;
+
+							printf("<HTR> dev[%02d]: full throttle timer start\n", heater->indx);
+							}
+
+
+						if (open_window_status(heater))
+							{
+							// wykryto otwarcie okna, wy³¹czam grzanie
+
+							printf("<HTR> dev[%02d]: CLOSED, OPEN WINDOW PROTECTION\n", heater->indx);
 
 							// wy³¹czenie timera
 							heater->max_throttle_timeout_active= false;
 							heater->max_throttle_timeout= 0;
 
-
-							// wy³aczam grzanie
 							duty_ratio= 0;
-
-							if (heater_ctrl_handler->duty_ratio != duty_ratio)
-								pwm_channel_set(heater_ctrl_handler, duty_ratio);
+							} // open_window_status
 
 
 
-							}
-						else
+
+						// zabezpieczenie przed maksymaln¹ temperatur¹
+						if ((duty_ratio != 0) && (heater->temp_current >= MAX_TEMPERATURE))
 							{
+							// przekroczono dozwolon¹ maksymaln¹ temperaturê
+							printf("<HTR> dev[%02d]: CLOSED, MAX_TEMPERATURE tmax=%2.3f\n", heater->indx, (float)MAX_TEMPERATURE/1000.0);
+							duty_ratio= 0;
+							}
 
-							heater_temp= (k_long)thermometer->temp_value;
-
-
-							xSemaphoreGive(thermometer_sem);
-
-							heater_temp*= 1000;
-							heater_temp>>= 4;
-
-							if (heater->temp_offset != 0)
-								heater_temp+= heater->temp_offset;
-
-							heater->temp_current= heater_temp;
-							temp_uchyb= heater->temp_zadana - heater_temp;
-
-							if (heater->PID_data.uchyb_prev == 0x80000000)
-								heater->PID_data.uchyb_prev= temp_uchyb;
-
-							ctrl_param= temp_pid_process(&heater->PID_data, temp_uchyb);
-
-							duty_ratio= (uint16_t)round((((float)ctrl_param / (float)PID_REG_MAX) * pwm_duty_ratio_max));
-
-
-
-							if (duty_ratio > pwm_duty_ratio_max)
-								{
-								duty_ratio= pwm_duty_ratio_max;
-								heater->pid_state= HTR_PID_STATE_HEATING_MAX;
-								}
-							else
-							if (duty_ratio < PWM_DUTY_RATIO_CUTOFF)
-								{
-								printf("<HTR> dev[%02d]: CLOSED\n", heater->indx);
-								duty_ratio= 0;
-								heater->pid_state= HTR_PID_STATE_IDLE;
-								}
-							else
-								heater->pid_state= HTR_PID_STATE_HEATING;
-
-							if ((duty_ratio > 0) && (temp_uchyb <= 0))
-								{
-								printf("<HTR> dev[%02d]: CLOSED, OVERHEATING\n", heater->indx);
-								duty_ratio= 0;
-								heater->pid_state= HTR_PID_STATE_OVERHEATING;
-								}
-
-
-							// zabezpieczenie przed ci¹g³ym za³¹czeniem grzania na full, w przypadku, gdy np. wy³aczony jest piec
-							// jesli czas otwarcia na full (np. > 800) trwa powyzej x sekund, to za³¹czyc pwm na podtrzymanie
-
-							if ((heater->max_throttle_timeout_active == true) && (duty_ratio < 800))
-								{
-								// wy³¹czenie timera
-								heater->max_throttle_timeout_active= false;
-								heater->max_throttle_timeout= 0;
-								printf("<HTR> dev[%02d]: full throttle timer stop\n", heater->indx);
-								}
-
-							if (heater->max_throttle_timeout_active == true)
-								{
-								if (heater->max_throttle_timeout != 0)
-									{
-									if (heater->max_throttle_timeout >= time_elapsed_sec)
-										heater->max_throttle_timeout-= time_elapsed_sec;
-									else
-										heater->max_throttle_timeout= 0;
-									}
-
-								if (heater->max_throttle_timeout == 0)
-									{
-									printf("<HTR> dev[%02d]: full throttle limiter\n", heater->indx);
-									duty_ratio= PWM_WARM_CONST_FACTOR;
-									heater->pid_state= HTR_PID_STATE_FULLTHR_LIMITER;
-									}
-								else
-									printf("<HTR> dev[%02d]: full throttle timer: %03d\n", heater->indx, heater->max_throttle_timeout);
-								}
-
-							if ((duty_ratio > 900) && (heater->max_throttle_timeout_active == false))
-								{
-								// za³¹czenie timera
-								heater->max_throttle_timeout= PWM_MAX_THROTTLE_TIMEOUT;
-								heater->max_throttle_timeout_active= true;
-
-								printf("<HTR> dev[%02d]: full throttle timer start\n", heater->indx);
-								}
-
-
-							if (open_window_status(heater))
-								{
-								// wykryto otwarcie okna, wy³¹czam grzanie
-
-								printf("<HTR> dev[%02d]: CLOSED, OPEN WINDOW PROTECTION\n", heater->indx);
-
-								// wy³¹czenie timera
-								heater->max_throttle_timeout_active= false;
-								heater->max_throttle_timeout= 0;
-
-								duty_ratio= 0;
-								} // open_window_status
-
-
-							if ((duty_ratio != 0) && (heater->temp_current >= MAX_TEMPERATURE))
-								{
-								// przekroczono dozwolon¹ maksymaln¹ temperaturê
-
-								printf("<HTR> dev[%02d]: CLOSED, MAX_TEMPERATURE tmax=%d\n", heater->indx, MAX_TEMPERATURE);
-								duty_ratio= 0;
-								}
-
-
-							printf("<HTR> dev[%02d]: therm[%02X] tset=%2.3f toff=%2.3f tdiff=%2.3f\n", heater->indx, heater->thermometer->indx, (float)heater->temp_zadana/1000, (float)heater->temp_offset/1000, (float)temp_uchyb/1000);
-							printf("<HTR> dev[%02d]: PID: %4d %4d %4d \n", heater->indx, heater->PID_data.P/1000, heater->PID_data.I/1000, heater->PID_data.D/1000);
-							printf("<HTR> dev[%02d]: PID param: %05d  duty_ratio: %04d\n", heater->indx, ctrl_param, duty_ratio);
-
-
-							if (heater_ctrl_handler->duty_ratio != duty_ratio)
-								{
-								printf("<HTR> dev[%02d]: PWM duty ratio set to:  %04d\n", heater->indx, duty_ratio);
-								pwm_channel_set(heater_ctrl_handler, duty_ratio); // 0 -- pwm_duty_ratio_max
-								}
-
-
-
+						// zabezpieczenie przed nadmiernym spadkiem temperatury, nawet przy otwartym oknie
+						if (heater->temp_current < MIN_TEMPERATURE)
+							{
+							printf("<HTR> dev[%02d]: OPENED, MIN_TEMPERATURE tmin=%2.3f\n", heater->indx, (float)MIN_TEMPERATURE/1000.0);
+							duty_ratio= PWM_DUTY_RATIO_MAX;
 							}
 
 
-						} // if (thermometer)
-					else
-						{
-						// brak zdefiniowanego termometru dla grzejnika
-						// wy³¹czam grzanie dla danego grzejnika
-
-						 // co z okresowym za³aczeniem ?
-						 // co z okresowym za³aczeniem ?
-						 // co z okresowym za³aczeniem ?
 
 
-						// wy³¹czenie timera
-						heater->max_throttle_timeout_active= false;
-						heater->max_throttle_timeout= 0;
 
+						printf("<HTR> dev[%02d]: therm[%02X] tset=%2.3f toff=%2.3f tdiff=%2.3f\n", heater->indx, heater->thermometer->indx, (float)heater->temp_zadana/1000, (float)heater->temp_offset/1000, (float)temp_uchyb/1000);
+						printf("<HTR> dev[%02d]: PID: %4d %4d %4d \n", heater->indx, heater->PID_data.P/1000, heater->PID_data.I/1000, heater->PID_data.D/1000);
+						printf("<HTR> dev[%02d]: PID param: %05d  duty_ratio: %04d\n", heater->indx, ctrl_param, duty_ratio);
 
-						// wy³aczam grzanie
-						duty_ratio= 0;
 
 						if (heater_ctrl_handler->duty_ratio != duty_ratio)
-							pwm_channel_set(heater_ctrl_handler, duty_ratio);
+							{
+							printf("<HTR> dev[%02d]: PWM duty ratio set to:  %04d\n", heater->indx, duty_ratio);
+							pwm_channel_set(heater_ctrl_handler, duty_ratio); // 0 -- pwm_duty_ratio_max
+							}
 
 
+						} // if (thermometer && (queue_dta == 0x00) && thermometer->temp_vaild)
+					else
+						xSemaphoreGive(thermometer_sem);
 
-
-						printf("<HTR> dev[%02d]: thermometer not found\n", heater->indx);
-
-						}
 
 					break;
 					} // GLOBAL_MODE_HEATING
@@ -461,10 +533,10 @@ void prvTempCtrlPIDTask(void *pvParameters)
 				} // switch (main_settings.global_mode)
 
 
+
+	prvTempCtrlPIDTask_next_therm:
+
 			heater->temp_prev= heater->temp_current;
-
-
-
 
 			heater_entry= heater_entry->next;
 
@@ -750,6 +822,7 @@ k_long open_window_status(heater_s *heater)
 					// wykryto otwarte okno
 					// temperatura spad³a o zadan¹ wartosc w czasie krotszym niz ...
 					heater->owp_begin_time= now;
+					heater->owp_begin_temp= 99999;
 					heater->owp_state= 0x01;
 
 					printf("<HTR> dev[%02d]: window opened\n", heater->indx);
@@ -770,10 +843,10 @@ k_long open_window_status(heater_s *heater)
 			{
 			// detekcja zamkniêcia okna
 
-			if (heater->temp_current < heater->temp_prev)
-				heater->owp_begin_time= now;
+			if (heater->temp_current < heater->owp_begin_temp)
+				heater->owp_begin_temp= heater->temp_current;
 			else
-			if ((now - heater->owp_begin_time) >= 120)
+			if ((heater->temp_current - heater->owp_begin_temp) >= 1000)
 				{
 				// wykryto zamkniête okno
 				// temperatura nie spadla przez zadany okres
