@@ -19,6 +19,7 @@
 #include "ksystem.h"
 #include "global.h"
 
+#include "usersettings.h"
 #include "tempctrlpid_thr.h"
 
 //-----------------------------------------------------------------------------
@@ -30,11 +31,11 @@ const k_long Kd_def= 12000;			// 10,000
 
 // nastawy min, max
 
-#define PID_REG_MIN				(k_long)0		//  0,000
-#define PID_REG_MAX				(k_long)10000	// 10,000
+#define PID_REG_MIN						(k_long)0		//  0,000
+#define PID_REG_MAX						(k_long)10000	// 10,000
 
-#define PWM_WARM_DOWN_FACTOR		200			// [0,1%]
-#define PWM_WARM_CONST_FACTOR		500			// [0,1%]
+#define PWM_WARM_DOWN_FACTOR			200				// [0,1%]
+#define PWM_WARM_CONST_FACTOR			500				// [0,1%]
 
 #define PWM_PERIOD						20 				// sec
 #define PWM_TIMER_FREQ					1200			// Hz
@@ -69,8 +70,8 @@ extern xQueueHandle temp_pid_queue;
 
 extern heater_ctrl_handler_s heater_ctrl_chnlst[HEATER_NUMBER];
 extern unsigned char *cmd_inter_strtok_del;
-
-
+extern user_settings_s *user_settings_tab;
+extern k_uchar *temp_preconfig_tab;
 
 
 
@@ -133,6 +134,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 	portTickType ticks_curr;
 	portTickType ticks_prev;
 	k_ulong time_elapsed_sec;
+	k_long user_temp;
 
 	time_t currtime;
 	char conbuffer[32];
@@ -183,7 +185,24 @@ void prvTempCtrlPIDTask(void *pvParameters)
 
 	msleep(5000);
 
+/*
+	int x;
+	for (x=0;x<USERSETTINGS_MAX;x++)
+		{
+		user_settings_s *user_settings= &user_settings_tab[x];
 
+		printf("user[%02d] %08X   %d %02X %02X %02X %d\n", x, user_settings,
+				user_settings->week_days >> 7,
+				user_settings->week_days & 0x7F,
+				user_settings->heaters,
+				user_settings->temperature,
+				sizeof(user_settings_s)
+		);
+
+
+
+		}
+*/
 
 
 
@@ -226,6 +245,9 @@ void prvTempCtrlPIDTask(void *pvParameters)
 		printf("<TIME> %s\n", conbuffer);
 
 		printf("MODE: %d\n", main_settings.global_mode);
+
+
+
 
 
 
@@ -353,6 +375,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 							{
 							printf("<HTR> dev[%02d]: OPENED, MIN_TEMPERATURE tmin=%2.3f\n", heater->indx, (float)MIN_TEMPERATURE/1000.0);
 							duty_ratio= PWM_DUTY_RATIO_MAX;
+							heater->pid_state= HTR_PID_STATE_MIN_TEMPERATURE;
 							}
 
 
@@ -382,6 +405,54 @@ void prvTempCtrlPIDTask(void *pvParameters)
 
 						heater_temp= (k_long)thermometer->temp_value;
 						xSemaphoreGive(thermometer_sem);
+
+
+
+
+						// dodaj obs³ugê wymuszenia temperatury !!!!!!!
+
+
+
+
+						// obs³uga harmonogramu prze³¹czania temperatury zadanej
+
+						if (((currtime_tm.tm_sec < THERMOMETER_READ_PERIOD) && ((currtime_tm.tm_min % 10) == 0)) || (heater->temp_zadana == 0))
+							{
+
+							if (usersettings_get(heater->indx, &currtime_tm, &user_temp) == 0)
+								{
+
+								if (heater->temp_zadana != user_temp)
+									{
+									heater->PID_data.uchyb_prev= 0x80000000; // magic value
+									heater->PID_data.I_prev= 0;
+									}
+
+								heater->temp_zadana= user_temp;
+								}
+							else
+								{
+								k_uchar pred_indx= HEATER_TEMP_DAY_LIFE;
+								k_uchar *pred_addr= temp_preconfig_tab + (int)((pred_indx >> 1) * 4 + (pred_indx & 1));
+
+								user_temp= (k_long)(*(k_uchar *)pred_addr) * 500;
+
+								if (heater->temp_zadana != user_temp)
+									{
+									heater->PID_data.uchyb_prev= 0x80000000; // magic value
+									heater->PID_data.I_prev= 0;
+									}
+
+								heater->temp_zadana= user_temp;
+
+								printf("<HTR> dev[%02d]: not defined temperature settings\n", heater->indx);
+								}
+
+							} // obs³uga harmonogramu prze³¹czania temperatury zadanej
+
+
+
+
 
 
 						heater_temp*= 1000;
@@ -477,6 +548,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 							heater->max_throttle_timeout= 0;
 
 							duty_ratio= 0;
+							heater->pid_state= HTR_PID_STATE_OWP;
 							} // open_window_status
 
 
@@ -488,6 +560,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 							// przekroczono dozwolon¹ maksymaln¹ temperaturê
 							printf("<HTR> dev[%02d]: CLOSED, MAX_TEMPERATURE tmax=%2.3f\n", heater->indx, (float)MAX_TEMPERATURE/1000.0);
 							duty_ratio= 0;
+							heater->pid_state= HTR_PID_STATE_MAX_TEMPERATURE;
 							}
 
 						// zabezpieczenie przed nadmiernym spadkiem temperatury, nawet przy otwartym oknie
@@ -495,6 +568,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 							{
 							printf("<HTR> dev[%02d]: OPENED, MIN_TEMPERATURE tmin=%2.3f\n", heater->indx, (float)MIN_TEMPERATURE/1000.0);
 							duty_ratio= PWM_DUTY_RATIO_MAX;
+							heater->pid_state= HTR_PID_STATE_MIN_TEMPERATURE;
 							}
 
 
@@ -848,12 +922,24 @@ k_long open_window_status(heater_s *heater)
 			else
 			if ((heater->temp_current - heater->owp_begin_temp) >= 1000)
 				{
+				// odbicie temperatury od minumum
 				// wykryto zamkniête okno
-				// temperatura nie spadla przez zadany okres
+
 				heater->owp_begin_time= 0;
 				heater->owp_state= 0x00;
 
 				printf("<HTR> dev[%02d]: window closed\n", heater->indx);
+				}
+			else
+			if ((now - heater->owp_begin_time) >= 1800) // zabezpieczenie czasowe, jêsli nie by³o odbicia temperatury od minimum
+				{
+				// timeout 30 min
+				// zamkniete okno
+
+				heater->owp_begin_time= 0;
+				heater->owp_state= 0x00;
+
+				printf("<HTR> dev[%02d]: window closed, timeout\n", heater->indx);
 				}
 
 			break;
