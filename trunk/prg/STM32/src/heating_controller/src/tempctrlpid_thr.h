@@ -32,6 +32,9 @@
 #define HTR_PID_STATE_HEATING_MAX		0x02
 #define HTR_PID_STATE_OVERHEATING		0x03
 #define HTR_PID_STATE_FULLTHR_LIMITER	0x04
+#define HTR_PID_STATE_OWP				0x05	// opened window protection
+#define HTR_PID_STATE_MAX_TEMPERATURE	0x06
+#define HTR_PID_STATE_MIN_TEMPERATURE	0x07
 
 
 //-----------------------------------------------------------------------------

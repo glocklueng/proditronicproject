@@ -37,6 +37,7 @@
 
 #include "tempctrlpid_thr.h"
 #include "cmd_interpreter.h"
+#include "usersettings.h"
 
 
 //unsigned char konfiguracja[512] __attribute__ ((section (".flash_config_data")));
@@ -84,7 +85,7 @@ wdlist_s heater_list;
 xQueueHandle temp_pid_queue;
 
 
-__IO uint32_t *cmos1; // BKP_DR1 - BKP_DR10, 10 rejestrów 16 bitowe
+__IO uint32_t *cmos1; // BKP_DR1 - BKP_DR10,  10 rejestrów 16 bitowe
 __IO uint32_t *cmos2; // BKP_DR11 - BKP_DR42, 32 rejestry 16 bitowe
 
 
@@ -92,6 +93,8 @@ __IO uint32_t *cmos2; // BKP_DR11 - BKP_DR42, 32 rejestry 16 bitowe
 extern void SD_LowLevel_Init(void);
 extern unsigned char *cmd_inter_strtok_del;
 
+
+const temp_preconfig_default[HEATER_PRECONFIG_TEMP_MAX]= {19, 20, 21, 22, 20, 20};
 
 const heater_cfg_s heater_cfg_tab[]=
 	{
@@ -106,8 +109,11 @@ const heater_cfg_s heater_cfg_tab[]=
 
 // cmos2
 
-uint16_t *thermometer_id_crc8_tab;			// + 0x00A0
 
+
+k_uchar *temp_preconfig_tab;				// + 0x0044 BKP_DR12, ilosc=3 rejestrów 16-bit
+user_settings_s *user_settings_tab;			// + 0x0050 BKP_DR15, ilosc=20 rejestrów 16-bit
+uint16_t *thermometer_id_crc8_tab;			// + 0x00A0 BKP_DR35, ilosc=8  rejestrów 16-bit
 
 
 
@@ -144,7 +150,10 @@ int main()
 	cmos1= (uint32_t)BKP_BASE + BKP_DR1;
 	cmos2= (uint32_t)BKP_BASE + BKP_DR11;
 
-	thermometer_id_crc8_tab= (uint32_t)BKP_BASE + 0xA0;
+
+	temp_preconfig_tab=			(uint32_t)BKP_BASE + 0x0044;
+	user_settings_tab= 			(uint32_t)BKP_BASE + 0x0050;
+	thermometer_id_crc8_tab=	(uint32_t)BKP_BASE + 0x00A0;
 
 
 
@@ -233,6 +242,79 @@ int main()
 		}
 
 
+	for (x=0;x<USERSETTINGS_MAX;x++)
+		{
+		user_settings_s *user_settings= &user_settings_tab[x];
+
+		STM32_BKP_REG_BYTE_WR(&user_settings->week_days, 0x00);
+		STM32_BKP_REG_BYTE_WR(&user_settings->heaters, 0x00);
+		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 0x00);
+		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, 0x00);
+		}
+
+
+	for (x=0;x<HEATER_PRECONFIG_TEMP_MAX;x++)
+		{
+		k_uchar *pred_addr= temp_preconfig_tab + (int)((x >> 1) * 4 + (x & 1));
+		STM32_BKP_REG_BYTE_WR(pred_addr, temp_preconfig_default[x] * 2)
+		}
+
+
+
+
+
+
+	//for (x=0;x<7;x++)
+		{
+		user_settings_s *user_settings;
+		k_uchar week_days;
+
+
+		week_days= 0x80 | 0x3E; // mon - fri
+
+		user_settings= &user_settings_tab[0];
+		STM32_BKP_REG_BYTE_WR(&user_settings->week_days, week_days);
+		STM32_BKP_REG_BYTE_WR(&user_settings->heaters, 0x03);
+		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 33);		// 05:30
+		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, HEATER_TEMP_DAY_LIFE);
+
+		user_settings= &user_settings_tab[1];
+		STM32_BKP_REG_BYTE_WR(&user_settings->week_days, week_days);
+		STM32_BKP_REG_BYTE_WR(&user_settings->heaters, 0x03);
+		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 45);		// 07:30
+		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, HEATER_TEMP_WORK);
+
+		user_settings= &user_settings_tab[2];
+		STM32_BKP_REG_BYTE_WR(&user_settings->week_days, week_days);
+		STM32_BKP_REG_BYTE_WR(&user_settings->heaters, 0x03);
+		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 78);		// 13:00
+		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, HEATER_TEMP_DAY_LIFE);
+
+		user_settings= &user_settings_tab[3];
+		STM32_BKP_REG_BYTE_WR(&user_settings->week_days, week_days);
+		STM32_BKP_REG_BYTE_WR(&user_settings->heaters, 0x03);
+		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 132);		// 22:00
+		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, HEATER_TEMP_NIGHT);
+
+
+
+		week_days= 0x80 | 0x41; // sat, sun
+
+		user_settings= &user_settings_tab[4];
+		STM32_BKP_REG_BYTE_WR(&user_settings->week_days, week_days);
+		STM32_BKP_REG_BYTE_WR(&user_settings->heaters, 0x03);
+		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 33);		// 05:30
+		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, HEATER_TEMP_DAY_LIFE);
+
+		user_settings= &user_settings_tab[5];
+		STM32_BKP_REG_BYTE_WR(&user_settings->week_days, week_days);
+		STM32_BKP_REG_BYTE_WR(&user_settings->heaters, 0x03);
+		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 132);		// 22:00
+		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, HEATER_TEMP_NIGHT);
+
+
+		}
+
 
 
 	main_settings.global_mode= GLOBAL_MODE_HEATING;
@@ -248,7 +330,7 @@ int main()
 		heater_new= (heater_s *)malloc(sizeof(heater_s));
 		heater_new->indx= x;
 		heater_new->state= 0x00;
-		heater_new->temp_zadana= 21000;
+		heater_new->temp_zadana= 0;
 		heater_new->temp_offset= 0;
 
 		heater_new->temp_prev= 0;
@@ -534,7 +616,7 @@ void cmdline_time_set(unsigned char *param)
 
 	if (nparam == 3)
 		{
-		if ((paramsval[0] >= 0) && (paramsval[0] < 23) && (paramsval[1] >= 0) && (paramsval[1] < 60) && (paramsval[2] >= 0) && (paramsval[2] < 60))
+		if ((paramsval[0] >= 0) && (paramsval[0] <= 23) && (paramsval[1] >= 0) && (paramsval[1] < 60) && (paramsval[2] >= 0) && (paramsval[2] < 60))
 			{
 			currtime= time(0);
 			localtime_r(&currtime, &currtime_tm);
