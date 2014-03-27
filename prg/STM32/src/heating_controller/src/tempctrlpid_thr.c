@@ -48,6 +48,7 @@ const k_long Kd_def= 12000;			// 10,000
 #define MAX_TEMPERATURE					24000
 #define MIN_TEMPERATURE					15000
 
+#define ANTI_CALC_TIMEOUT				900				// sec
 
 
 #define LOGFILE_BUFFER_LENGTH			256
@@ -72,7 +73,7 @@ extern heater_ctrl_handler_s heater_ctrl_chnlst[HEATER_NUMBER];
 extern unsigned char *cmd_inter_strtok_del;
 extern user_settings_s *user_settings_tab;
 extern k_uchar *temp_preconfig_tab;
-
+extern k_uchar *heater_anticalc_status;
 
 
 int pwm_duty_ratio_max;
@@ -90,6 +91,7 @@ struct tm currtime_tm;
 k_long temp_pid_process(PID_data_s *PID_data, k_long uchyb);
 k_long pwm_channel_init(heater_ctrl_handler_s *heater_ctrl_handler);
 k_long open_window_status(heater_s *heater);
+k_uchar anti_calc_protection(heater_s *heater, struct tm *current_time); // 1 - zadzia³anie zabezpieczenia
 
 void tempctrl_write2logfile();
 
@@ -244,10 +246,12 @@ void prvTempCtrlPIDTask(void *pvParameters)
 		strftime(conbuffer, 32, "%Y-%m-%d %H:%M:%S", &currtime_tm);
 		printf("<TIME> %s\n", conbuffer);
 
-		printf("MODE: %d\n", main_settings.global_mode);
+		printf("MODE:%d  anti-calc:%02X\n", main_settings.global_mode, *heater_anticalc_status);
 
 
-
+		// anti-calc protection
+		if ((currtime_tm.tm_mday >= 8) && (currtime_tm.tm_mday <= 15) && (*heater_anticalc_status != 0xFF))
+			STM32_BKP_REG_BYTE_WR(heater_anticalc_status, 0xFF); // ustaw na "1"
 
 
 
@@ -256,8 +260,23 @@ void prvTempCtrlPIDTask(void *pvParameters)
 			{
 			heater= (heater_s *)heater_entry->data;
 
-			thermometer= (heater->thermometer > 0x100) ? heater->thermometer : NULL; // sprawdzam czy zamiast indeksu podstawiono ju¿ wskaŸnik
+			thermometer= ((int)heater->thermometer > 0x100) ? heater->thermometer : NULL; // sprawdzam czy zamiast indeksu podstawiono ju¿ wskaŸnik
 			heater_ctrl_handler= thermometer ? heater->heater_ctrl_handler : NULL;
+
+
+			// anti-calc protection
+
+			if (queue_dta == 0x00)
+				{
+				if (heater->owp_state == 0x00)
+					heater->anti_calc_state= anti_calc_protection(heater, &currtime_tm);
+				else
+					heater->anti_calc_state= 0x00;
+				}
+
+			if (heater->anti_calc_state)
+				printf("<HTR> dev[%02d]: anti-calc protection (%d)\n", heater->indx, heater->anti_calc_timeout);
+
 
 
 			if (thermometer)
@@ -283,11 +302,12 @@ void prvTempCtrlPIDTask(void *pvParameters)
 					duty_ratio= 0;
 
 
-					// co z okresowym za³aczeniem ?
-					// co z okresowym za³aczeniem ?
-					// co z okresowym za³aczeniem ?
-
-
+					// anti-calc protection
+					if (heater->anti_calc_state)
+						{
+						duty_ratio= PWM_DUTY_RATIO_MAX;
+						heater->pid_state= HTR_PID_STATE_ANTI_CALC_PROT;
+						}
 
 
 					if (heater_ctrl_handler->duty_ratio != duty_ratio)
@@ -314,9 +334,13 @@ void prvTempCtrlPIDTask(void *pvParameters)
 				// wy³aczam grzanie
 				duty_ratio= 0;
 
-				// co z okresowym za³aczeniem ?
-				// co z okresowym za³aczeniem ?
-				// co z okresowym za³aczeniem ?
+
+				// anti-calc protection
+				if (heater->anti_calc_state)
+					{
+					duty_ratio= PWM_DUTY_RATIO_MAX;
+					heater->pid_state= HTR_PID_STATE_ANTI_CALC_PROT;
+					}
 
 
 				if (heater_ctrl_handler->duty_ratio != duty_ratio)
@@ -365,9 +389,12 @@ void prvTempCtrlPIDTask(void *pvParameters)
 						duty_ratio= 0;
 
 
-						// co z okresowym za³aczeniem ?
-						// co z okresowym za³aczeniem ?
-						// co z okresowym za³aczeniem ?
+						// anti-calc protection
+						if (heater->anti_calc_state)
+							{
+							duty_ratio= PWM_DUTY_RATIO_MAX;
+							heater->pid_state= HTR_PID_STATE_ANTI_CALC_PROT;
+							}
 
 
 						// zabezpieczenie przed nadmiernym spadkiem temperatury, nawet przy otwartym oknie
@@ -408,47 +435,79 @@ void prvTempCtrlPIDTask(void *pvParameters)
 
 
 
-
-						// dodaj obs³ugê wymuszenia temperatury !!!!!!!
-
-
-
-
 						// obs³uga harmonogramu prze³¹czania temperatury zadanej
+						// sprawdzam w ka¿dej 10-tej minucie, np. 12:00, 12:10, 12:20, ...
 
-						if (((currtime_tm.tm_sec < THERMOMETER_READ_PERIOD) && ((currtime_tm.tm_min % 10) == 0)) || (heater->temp_zadana == 0))
+						if (heater->temp_setpoint_forced_timeout != 0)
+							{
+
+							if (heater->temp_setpoint_forced_timeout >= time_elapsed_sec)
+								heater->temp_setpoint_forced_timeout-= time_elapsed_sec;
+							else
+								heater->temp_setpoint_forced_timeout= 0;
+
+							if (heater->temp_setpoint_forced_timeout != 0)
+								{
+								k_uchar pred_indx= heater->pred_temp_indx_forced;
+								k_uchar *pred_addr= temp_preconfig_tab + (int)((pred_indx >> 1) * 4 + (pred_indx & 1));
+
+								user_temp= (k_long)(*(k_uchar *)pred_addr) * 500;
+
+								if (heater->temp_setpoint != user_temp)
+									{
+									heater->PID_data.uchyb_prev= 0x80000000; // magic value
+									heater->PID_data.I_prev= 0;
+									}
+
+								heater->temp_setpoint= user_temp;
+
+								printf("<HTR> dev[%02d]: temp setpoint forced [%d]: %d\n", heater->indx, pred_indx, heater->temp_setpoint_forced_timeout);
+								}
+							else
+								{
+								// koniec wartosci wymuszonej
+								// wymuszam odczyt nastawy z harmonogramu
+								heater->temp_setpoint= 0;
+								}
+
+							} // temp_setpoint_forced_timeout
+
+						if (((heater->temp_setpoint_forced_timeout == 0) && ((currtime_tm.tm_sec < THERMOMETER_READ_PERIOD) && ((currtime_tm.tm_min % 10) == 0))) || (heater->temp_setpoint == 0))
 							{
 
 							if (usersettings_get(heater->indx, &currtime_tm, &user_temp) == 0)
 								{
 
-								if (heater->temp_zadana != user_temp)
+								if (heater->temp_setpoint != user_temp)
 									{
 									heater->PID_data.uchyb_prev= 0x80000000; // magic value
 									heater->PID_data.I_prev= 0;
 									}
 
-								heater->temp_zadana= user_temp;
+								heater->temp_setpoint= user_temp;
 								}
 							else
 								{
+								// nie znaleziono nastaw
+
 								k_uchar pred_indx= HEATER_TEMP_DAY_LIFE;
 								k_uchar *pred_addr= temp_preconfig_tab + (int)((pred_indx >> 1) * 4 + (pred_indx & 1));
 
 								user_temp= (k_long)(*(k_uchar *)pred_addr) * 500;
 
-								if (heater->temp_zadana != user_temp)
+								if (heater->temp_setpoint != user_temp)
 									{
 									heater->PID_data.uchyb_prev= 0x80000000; // magic value
 									heater->PID_data.I_prev= 0;
 									}
 
-								heater->temp_zadana= user_temp;
+								heater->temp_setpoint= user_temp;
 
 								printf("<HTR> dev[%02d]: not defined temperature settings\n", heater->indx);
 								}
 
 							} // obs³uga harmonogramu prze³¹czania temperatury zadanej
+
 
 
 
@@ -462,7 +521,7 @@ void prvTempCtrlPIDTask(void *pvParameters)
 							heater_temp+= heater->temp_offset;
 
 						heater->temp_current= heater_temp;
-						temp_uchyb= heater->temp_zadana - heater_temp;
+						temp_uchyb= heater->temp_setpoint - heater_temp;
 
 						if (heater->PID_data.uchyb_prev == 0x80000000)
 							heater->PID_data.uchyb_prev= temp_uchyb;
@@ -522,6 +581,11 @@ void prvTempCtrlPIDTask(void *pvParameters)
 								printf("<HTR> dev[%02d]: full throttle limiter\n", heater->indx);
 								duty_ratio= PWM_WARM_CONST_FACTOR;
 								heater->pid_state= HTR_PID_STATE_FULLTHR_LIMITER;
+
+								// anti-calc protection, kasuj
+								if ((currtime_tm.tm_mday >= 16) && (*heater_anticalc_status & (1 << heater->indx)))
+									STM32_BKP_REG_BYTE_WR(heater_anticalc_status, (*heater_anticalc_status & (~(k_uchar)(1 << heater->indx))));
+
 								}
 							else
 								printf("<HTR> dev[%02d]: full throttle timer: %03d\n", heater->indx, heater->max_throttle_timeout);
@@ -571,11 +635,16 @@ void prvTempCtrlPIDTask(void *pvParameters)
 							heater->pid_state= HTR_PID_STATE_MIN_TEMPERATURE;
 							}
 
+						// anti-calc protection
+						if (heater->anti_calc_state)
+							{
+							duty_ratio= PWM_DUTY_RATIO_MAX;
+							heater->pid_state= HTR_PID_STATE_ANTI_CALC_PROT;
+							}
 
 
 
-
-						printf("<HTR> dev[%02d]: therm[%02X] tset=%2.3f toff=%2.3f tdiff=%2.3f\n", heater->indx, heater->thermometer->indx, (float)heater->temp_zadana/1000, (float)heater->temp_offset/1000, (float)temp_uchyb/1000);
+						printf("<HTR> dev[%02d]: state[%x] therm[%02X] tset=%2.3f toff=%2.3f tdiff=%2.3f\n", heater->indx, heater->pid_state, heater->thermometer->indx, (float)heater->temp_setpoint/1000, (float)heater->temp_offset/1000, (float)temp_uchyb/1000);
 						printf("<HTR> dev[%02d]: PID: %4d %4d %4d \n", heater->indx, heater->PID_data.P/1000, heater->PID_data.I/1000, heater->PID_data.D/1000);
 						printf("<HTR> dev[%02d]: PID param: %05d  duty_ratio: %04d\n", heater->indx, ctrl_param, duty_ratio);
 
@@ -891,7 +960,7 @@ k_long open_window_status(heater_s *heater)
 			else
 			if ((now - heater->owp_begin_time) <= 600)
 				{
-				if ((heater->owp_begin_temp - heater->temp_current) >= 1000)
+				if ((heater->owp_begin_temp - heater->temp_current) >= 2000)
 					{
 					// wykryto otwarte okno
 					// temperatura spad³a o zadan¹ wartosc w czasie krotszym niz ...
@@ -958,6 +1027,51 @@ k_long open_window_status(heater_s *heater)
 	printf("opw: %02X tb %d, td %d, temp_now %5d, temp_prev %5d, temp_begin %5d\n", heater->owp_state, heater->owp_begin_time, now - heater->owp_begin_time, heater->temp_current, heater->temp_prev, heater->owp_begin_temp);
 
 	return heater->owp_state;
+	}
+
+//-----------------------------------------------------------------------------
+
+k_uchar anti_calc_protection(heater_s *heater, struct tm *current_time)
+	{
+	k_uchar result= 0;
+
+	if (!heater || !current_time)
+		return 0;
+
+
+	if (heater->anti_calc_state == 1)
+		{
+
+		if (heater->anti_calc_timeout > THERMOMETER_READ_PERIOD)
+			heater->anti_calc_timeout-= THERMOMETER_READ_PERIOD;
+		else
+			heater->anti_calc_timeout= 0;
+
+		if (heater->anti_calc_timeout == 0)
+			{
+			// zakonczenie
+			STM32_BKP_REG_BYTE_WR(heater_anticalc_status, (*heater_anticalc_status & (~(k_uchar)(1 << heater->indx)))); // kasuj status
+			result= 0;
+			}
+		else
+			result= 1; // zadzia³anie
+
+		return result;
+		}
+
+
+
+	if (!(*heater_anticalc_status & (1 << heater->indx)))
+		return 0;
+
+	if ((current_time->tm_wday != 0) || (current_time->tm_mday > 7))
+		return 0;
+
+	if (current_time->tm_hour < 21)
+		return 0;
+
+	heater->anti_calc_timeout= ANTI_CALC_TIMEOUT;
+	return 1; // zadzia³anie
 	}
 
 //-----------------------------------------------------------------------------
@@ -1030,7 +1144,7 @@ void tempctrl_write2logfile()
 			heater->PID_data.P/1000,
 			heater->PID_data.I/1000,
 			heater->PID_data.D/1000,
-			(float)heater->temp_zadana/1000,
+			(float)heater->temp_setpoint/1000,
 			(float)heater->temp_offset/1000,
 			(float)heater->temp_current/1000,
 			heater->pid_state,
@@ -1158,7 +1272,7 @@ void cmdline_heater_param_set(unsigned char *param)
 					{
 					printf("<HTR> dev[%02d]: temp set to %d\n", heater->indx, paramsval[0]);
 
-					heater->temp_zadana= paramsval[0];
+					heater->temp_setpoint= paramsval[0];
 
 					heater->PID_data.uchyb_prev= 0x80000000; // magic value
 					heater->PID_data.I_prev= 0;
