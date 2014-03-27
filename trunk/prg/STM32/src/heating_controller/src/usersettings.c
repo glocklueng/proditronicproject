@@ -41,15 +41,13 @@ int usersettings_get(k_uchar heater_index, struct tm *current_time, k_long *temp
 	today= (1 << current_time->tm_wday); // dzien aktualny
 	yesterday= (current_time->tm_wday == 0) ? 0x40 : (1 << (current_time->tm_wday - 1)); // dzien poprzedni
 	systime= current_time->tm_hour * 60 + current_time->tm_min; // czas aktualny w minutach od poczatku dnia
-
+/*
 	for (x=0;x<HEATER_PRECONFIG_TEMP_MAX;x++)
 		{
 		k_uchar *addr= temp_preconfig_tab + (int)((x >> 1) * 4 + (x & 1));
-
-
 		printf("addr: %08X %d\n", addr, *addr);
 		}
-
+*/
 
 
 	for (x=0;x<USERSETTINGS_MAX;x++)

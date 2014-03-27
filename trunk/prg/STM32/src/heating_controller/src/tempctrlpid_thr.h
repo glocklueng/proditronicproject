@@ -35,6 +35,7 @@
 #define HTR_PID_STATE_OWP				0x05	// opened window protection
 #define HTR_PID_STATE_MAX_TEMPERATURE	0x06
 #define HTR_PID_STATE_MIN_TEMPERATURE	0x07
+#define HTR_PID_STATE_ANTI_CALC_PROT	0x08
 
 
 //-----------------------------------------------------------------------------
@@ -72,10 +73,14 @@ typedef struct
 	thermometer_s *thermometer;
 	heater_ctrl_handler_s *heater_ctrl_handler;
 
-	k_long temp_zadana;
-	k_long temp_offset; // korekta temperatury
+	k_short temp_setpoint;
+	k_short temp_offset;		// korekta temperatury
 	k_long temp_current;
 	k_long temp_prev;
+
+
+	k_uchar pred_temp_indx_forced;
+	k_ushort temp_setpoint_forced_timeout;
 
 	k_uchar pid_state;
 
@@ -89,6 +94,9 @@ typedef struct
 	k_uchar owp_state;
 	time_t owp_begin_time;
 	k_long owp_begin_temp;
+
+	k_uchar anti_calc_state;
+	k_ushort anti_calc_timeout;
 
 
 

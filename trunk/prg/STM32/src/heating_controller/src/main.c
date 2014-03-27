@@ -110,7 +110,7 @@ const heater_cfg_s heater_cfg_tab[]=
 // cmos2
 
 
-
+k_uchar *heater_anticalc_status;			// + 0x0040 BKP_DR11, ilosc=1 rejestrów 16-bit
 k_uchar *temp_preconfig_tab;				// + 0x0044 BKP_DR12, ilosc=3 rejestrów 16-bit
 user_settings_s *user_settings_tab;			// + 0x0050 BKP_DR15, ilosc=20 rejestrów 16-bit
 uint16_t *thermometer_id_crc8_tab;			// + 0x00A0 BKP_DR35, ilosc=8  rejestrów 16-bit
@@ -151,6 +151,7 @@ int main()
 	cmos2= (uint32_t)BKP_BASE + BKP_DR11;
 
 
+	heater_anticalc_status=		(uint32_t)BKP_BASE + 0x0040;
 	temp_preconfig_tab=			(uint32_t)BKP_BASE + 0x0044;
 	user_settings_tab= 			(uint32_t)BKP_BASE + 0x0050;
 	thermometer_id_crc8_tab=	(uint32_t)BKP_BASE + 0x00A0;
@@ -260,7 +261,7 @@ int main()
 		}
 
 
-
+//	*heater_anticalc_status= 0xFF;
 
 
 
@@ -278,24 +279,27 @@ int main()
 		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 33);		// 05:30
 		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, HEATER_TEMP_DAY_LIFE);
 
+/*
 		user_settings= &user_settings_tab[1];
 		STM32_BKP_REG_BYTE_WR(&user_settings->week_days, week_days);
 		STM32_BKP_REG_BYTE_WR(&user_settings->heaters, 0x03);
 		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 45);		// 07:30
 		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, HEATER_TEMP_WORK);
-
+*/
+/*
 		user_settings= &user_settings_tab[2];
 		STM32_BKP_REG_BYTE_WR(&user_settings->week_days, week_days);
 		STM32_BKP_REG_BYTE_WR(&user_settings->heaters, 0x03);
 		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 78);		// 13:00
 		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, HEATER_TEMP_DAY_LIFE);
-
+*/
+/*
 		user_settings= &user_settings_tab[3];
 		STM32_BKP_REG_BYTE_WR(&user_settings->week_days, week_days);
 		STM32_BKP_REG_BYTE_WR(&user_settings->heaters, 0x03);
 		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 132);		// 22:00
 		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, HEATER_TEMP_NIGHT);
-
+*/
 
 
 		week_days= 0x80 | 0x41; // sat, sun
@@ -305,13 +309,13 @@ int main()
 		STM32_BKP_REG_BYTE_WR(&user_settings->heaters, 0x03);
 		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 33);		// 05:30
 		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, HEATER_TEMP_DAY_LIFE);
-
+/*
 		user_settings= &user_settings_tab[5];
 		STM32_BKP_REG_BYTE_WR(&user_settings->week_days, week_days);
 		STM32_BKP_REG_BYTE_WR(&user_settings->heaters, 0x03);
 		STM32_BKP_REG_BYTE_WR(&user_settings->begin_time, 132);		// 22:00
 		STM32_BKP_REG_BYTE_WR(&user_settings->pred_temp_indx, HEATER_TEMP_NIGHT);
-
+*/
 
 		}
 
@@ -320,6 +324,8 @@ int main()
 	main_settings.global_mode= GLOBAL_MODE_HEATING;
 
 	
+
+
 	// grzejniki
 
 	for (x=0;x<(sizeof(heater_cfg_tab)/sizeof(heater_cfg_s));x++)
@@ -330,12 +336,18 @@ int main()
 		heater_new= (heater_s *)malloc(sizeof(heater_s));
 		heater_new->indx= x;
 		heater_new->state= 0x00;
-		heater_new->temp_zadana= 0;
+		heater_new->temp_setpoint= 0;
 		heater_new->temp_offset= 0;
+
+		heater_new->temp_setpoint_forced_timeout= 0;
+
+
 
 		heater_new->temp_prev= 0;
 		heater_new->owp_state= 0x00;
 		heater_new->owp_begin_time= 0;
+
+		heater_new->anti_calc_state= 0x00;
 
 		heater_new->max_throttle_timeout_active= false;
 		heater_new->max_throttle_timeout= 0;
