@@ -36,14 +36,16 @@ bool blinking_f;			// 1 - visible, 0 - not visible
 bool blinking_change_f;		// state changed
 
 bool screen_update_f;
-
+unsigned char menu_chosen_item_index;
 
 //------------------------------------------------------------------------------
 
 void tpgui_thread(void *params);
 
 void tpgui_screen_draw(tpgui_screen_s *gui_screen);
+
 void tpgui_menu_draw(tpgui_menu_s *gui_menu);
+tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char action);
 
 void tpgui_x_label_draw(tpgui_screen_item_label_s *item);
 
@@ -81,6 +83,10 @@ void tpgui_thread(void *params)
 	void *current_screen= params;
 	unsigned char blinking_cntr;
 
+	unsigned char key_pressed;
+	unsigned char key_long_pressed;
+	tpgui_action_s *user_action;
+
 	blinking_cntr= BLINKING_CNTR_MAX;
 	blinking_f= true;
 	blinking_change_f= false;
@@ -93,6 +99,82 @@ void tpgui_thread(void *params)
 		{
 
         vTaskDelay(TPGUI_SCREEN_REFRESH_PERIOD);
+
+		user_action= NULL;
+
+
+// obs³uga klawiszy
+
+		key_pressed= tpgui_key_pressed();
+
+		if (key_pressed)
+			{
+			key_long_pressed= tpgui_key_long_pressed();
+
+			switch ((tpgui_screen_s *)current_screen->type)
+				{
+
+				case TPGUI_SCREEN:
+					{
+					tpgui_screen_s *screen= (tpgui_screen_s *)current_screen;
+
+					if (key_pressed & TPGUI_KEY_PRESS_EXIT)
+						user_action= (key_long_pressed & TPGUI_KEY_PRESS_EXIT) ? screen->keyEXl_action : screen->keyEX_action;
+					else
+					if (key_pressed & TPGUI_KEY_PRESS_UP)
+						user_action= (key_long_pressed & TPGUI_KEY_PRESS_UP) ? screen->keyUPl_action : screen->keyUP_action;
+					else
+					if (key_pressed & TPGUI_KEY_PRESS_DOWN)
+						user_action= (key_long_pressed & TPGUI_KEY_PRESS_DOWN) ? screen->keyDWl_action : screen->keyDW_action;
+					else
+					if (key_pressed & TPGUI_KEY_PRESS_OK)
+						user_action= (key_long_pressed & TPGUI_KEY_PRESS_OK) ? screen->keyOKl_action : screen->keyOK_action;
+
+					break;
+					} // TPGUI_SCREEN
+
+				case TPGUI_MENU:
+					{
+					tpgui_menu_s *menu= (tpgui_menu_s *)current_screen;
+					unsigned char menu_action= 0x00;
+
+					if (key_pressed & TPGUI_KEY_PRESS_EXIT)
+						menu_action= TPGUI_KEY_PRESS_EXIT;
+					else
+					if (key_pressed & TPGUI_KEY_PRESS_UP)
+						menu_action= TPGUI_KEY_PRESS_UP;
+					else
+					if (key_pressed & TPGUI_KEY_PRESS_DOWN)
+						menu_action= TPGUI_KEY_PRESS_DOWN;
+					else
+					if (key_pressed & TPGUI_KEY_PRESS_OK)
+						menu_action= TPGUI_KEY_PRESS_OK;
+
+					if (menu_action)
+						user_action= tpgui_menu_action(menu, menu_action);
+
+					break;
+					} // TPGUI_MENU
+
+				default:
+					break;
+
+				} // (tpgui_screen_s *)current_screen->type
+
+			} // if (key_pressed)
+
+
+		if (user_action)
+			{
+
+			switch ()
+				{
+				}
+
+			} // if (user_action)
+
+
+// obs³uga wyœwietlania
 
 		switch ((tpgui_screen_s *)current_screen->type)
 			{
@@ -113,10 +195,12 @@ void tpgui_thread(void *params)
 
 			} // switch ((tpgui_screen_s *)current_screen->type)
 
+
 		screen_update_f= false;
 		blinking_change_f= false;
-		
 
+
+		
 
 		// jeœli zmiana ekranu, wymuœ !!!:
 		// screen_update_f= true;
@@ -160,6 +244,8 @@ void tpgui_screen_item_add(tpgui_screen_s *screen, tpgui_screen_item_s *item)
 	if (!screen || !item)
 		return;
 
+	item->changed= true;
+
 	wdlist_entry= (wdlist_entry_s *)malloc(sizeof(wdlist_entry_s));
 	wdlist_entry->data= (void *)item;
 	wdlist_append(&screen->item_list, wdlist_entry);
@@ -175,7 +261,7 @@ void tpgui_screen_draw(tpgui_screen_s *gui_screen)
 	if (!gui_screen)
 		return;
 
-	wdlist_entry= gui_screen->item_list.first_entry
+	wdlist_entry= gui_screen->item_list.first_entry;
 	while (wdlist_entry)
 		{
 		tpgui_screen_item_s *xitem= (tpgui_screen_item_s *)wdlist_entry->data;
@@ -188,7 +274,7 @@ void tpgui_screen_draw(tpgui_screen_s *gui_screen)
 
 				case TPGUI_SI_LABEL:
 					{
-					tpgui_x_label_draw((tpgui_screen_item_label_s *)xitem)
+					tpgui_x_label_draw((tpgui_screen_item_label_s *)xitem);
 					break;
 					} // TPGUI_SI_LABEL
 
@@ -201,7 +287,7 @@ void tpgui_screen_draw(tpgui_screen_s *gui_screen)
 			} // if (screen_update_f ...)
 
 		wdlist_entry= wdlist_entry->next;
-		}
+		} // while (wdlist_entry)
 
 	}
 
@@ -230,9 +316,57 @@ void tpgui_x_label_draw(tpgui_screen_item_label_s *item)
 
 void tpgui_menu_draw(tpgui_menu_s *gui_menu)
 	{
+	wdlist_entry_s *wdlist_entry;
+	unsigned char item_index= 0;
+
+	if (!gui_menu)
+		return;
+
+	if (screen_update_f)
+		menu_chosen_item_index= 0;
+
+	if (screen_update_f || gui_menu->changed)
+		{
+
+		wdlist_entry= gui_menu->item_list.first_entry;
+		while (wdlist_entry)
+			{
+			tpgui_menu_item_s *xitem= (tpgui_menu_item_s *)wdlist_entry->data;
+			bool chosen= (menu_chosen_item_index == item_index);
+	
+			switch (xitem->type)
+				{
+
+				case TPGUI_MI_LABEL:
+					{
+
+
+					break;
+					}
+
+
+				
+				} // switch (xitem->type)
+
+			item_index+= 1;
+			wdlist_entry= wdlist_entry->next;
+
+			} // while (wdlist_entry)
+
+		gui_menu->changed= false;
+
+		} // if (screen_update_f || gui_menu->changed)
+
 	}
 
 //------------------------------------------------------------------------------
+
+tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char action)
+	{
+
+	return NULL;
+	}
+
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 

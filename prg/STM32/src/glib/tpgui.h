@@ -14,16 +14,72 @@
 
 #define TPGUI_SCREEN		0x01
 #define TPGUI_MENU			0x02
+#define TPGUI_FUNCTION		0x10
+
+
+
+#define TPGUI_KEY_PRESS_OK		0x01
+#define TPGUI_KEY_PRESS_EXIT	0x02
+#define TPGUI_KEY_PRESS_UP		0x04
+#define TPGUI_KEY_PRESS_DOWN	0x08
+
+
 
 
 enum TPGUI_SCREEN_ITEM
 	{
-	TPGUI_SI_LABEL
+	TPGUI_SI_LABEL,
 
 
 	};
 
 
+enum TPGUI_MENU_ITEM
+	{
+	TPGUI_MI_LABEL,
+
+
+	};
+
+
+
+//------------------------------------------------------------------------------
+
+typedef struct
+	{
+	unsigned char type;
+
+
+	} tpgui_action_s;
+
+
+typedef struct
+	{
+	unsigned char type;
+	wdlist_s item_list;
+	
+	tpgui_action_s *keyOK_action;
+	tpgui_action_s *keyEX_action;
+	tpgui_action_s *keyUP_action;
+	tpgui_action_s *keyDW_action;
+	
+	tpgui_action_s *keyOKl_action;
+	tpgui_action_s *keyEXl_action;
+	tpgui_action_s *keyUPl_action;
+	tpgui_action_s *keyDWl_action;
+	
+	} tpgui_screen_s;
+
+
+typedef struct
+	{
+	unsigned char type;
+	wdlist_s item_list;
+	
+	bool changed;
+
+
+	} tpgui_menu_s;
 
 
 //------------------------------------------------------------------------------
@@ -39,32 +95,16 @@ typedef struct
 
 typedef struct
 	{
-	unsigned char type;
-
-	wdlist_s item_list;
-
-	void *sclick_menu;
-	void *lclick_menu;
-
-	} tpgui_screen_s;
-
-
-typedef struct
-	{
+	TPGUI_MENU_ITEM type;
 
 
 	} tpgui_menu_item_s;
 
 
-typedef struct
-	{
-	unsigned char type;
-
-
-	} tpgui_menu_s;
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
+// SCREEN ITEM
 
 typedef struct
 	{
@@ -79,10 +119,18 @@ typedef struct
 	unsigned char *text;
 
 
-
-
-
 	} tpgui_screen_item_label_s;
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+// MENU ITEM
+
+typedef struct
+	{
+	TPGUI_MENU_ITEM type;
+	
+	
+	} tpgui_menu_item_label_s;
 
 
 
