@@ -36,6 +36,8 @@ bool blinking_f;			// 1 - visible, 0 - not visible
 bool blinking_change_f;		// state changed
 
 bool screen_update_f;
+
+unsigned char menu_first_visible_item_index;
 unsigned char menu_chosen_item_index;
 
 //------------------------------------------------------------------------------
@@ -43,15 +45,16 @@ unsigned char menu_chosen_item_index;
 void tpgui_thread(void *params);
 
 void tpgui_screen_draw(tpgui_screen_s *gui_screen);
-
 void tpgui_menu_draw(tpgui_menu_s *gui_menu);
-tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char action);
+
+tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char menu_action);
+
 
 void tpgui_x_label_draw(tpgui_screen_item_label_s *item);
 
 
 
-void tpgui_prim_text_draw(tpgui_screen_item_label_s *item);
+void tpgui_prim_text_draw(tpgui_screen_item_label_s *item);;
 
 
 void tpgui_prim_area_clean();
@@ -68,11 +71,8 @@ void tpgui_run(void *start_screen)
 	if (!start_screen)
 		return;
 
-	lcd.init();
-	lcd.screen_clear();
 
-
-    xTaskCreate(tpgui_thread, "gui", STACK_SIZE, (void *)start_screen, tskIDLE_PRIORITY, NULL);
+	xTaskCreate(tpgui_thread, "gui", 512, (void *)start_screen, tskIDLE_PRIORITY, NULL);
 
 	}
 
@@ -81,28 +81,45 @@ void tpgui_run(void *start_screen)
 void tpgui_thread(void *params)
 	{
 	void *current_screen= params;
+	bool lcd_reset= true;
 	unsigned char blinking_cntr;
 
 	unsigned char key_pressed;
 	unsigned char key_long_pressed;
 	tpgui_action_s *user_action;
-
+/*
 	blinking_cntr= BLINKING_CNTR_MAX;
 	blinking_f= true;
 	blinking_change_f= false;
 
 	screen_update_f= true;
+*/
 
+	GLCD_NJU6450A_init();
 
 
 	while (1)
 		{
 
-        vTaskDelay(TPGUI_SCREEN_REFRESH_PERIOD);
+		if (lcd_reset)
+			{
+			lcd.init();
+
+			lcd_reset= false;
+			}
+
+//        vTaskDelay(TPGUI_SCREEN_REFRESH_PERIOD);
+        vTaskDelay(4000);
+
+
+		lcd.screen_clear();
 
 		user_action= NULL;
 
 
+		printf("!\n");
+
+/*
 // obs³uga klawiszy
 
 		key_pressed= tpgui_key_pressed();
@@ -139,7 +156,7 @@ void tpgui_thread(void *params)
 					unsigned char menu_action= 0x00;
 
 					if (key_pressed & TPGUI_KEY_PRESS_EXIT)
-						menu_action= TPGUI_KEY_PRESS_EXIT;
+						user_action= menu->up_menu;
 					else
 					if (key_pressed & TPGUI_KEY_PRESS_UP)
 						menu_action= TPGUI_KEY_PRESS_UP;
@@ -167,14 +184,65 @@ void tpgui_thread(void *params)
 		if (user_action)
 			{
 
-			switch ()
+			switch (user_action->type)
 				{
-				}
+
+				case TPGUI_SCREEN:
+					{
+					// prze³¹czenie ekranu
+
+					if (user_action->action.screen)
+						{
+						current_screen= (void *)user_action->action.screen;
+						screen_update_f= true;
+						}
+
+					break;
+					} // TPGUI_SCREEN, TPGUI_MENU
+
+				case TPGUI_MENU:
+					{
+					// prze³¹czenie ekranu
+
+					if (user_action->action.menu)
+						{
+						current_screen= (void *)user_action->action.menu;
+						screen_update_f= true;
+						}
+
+					break;
+					} // TPGUI_MENU
+
+				case TPGUI_FUNCTION:
+					{
+					// wywo³anie funkcji
+
+					if (user_action->action.function)
+						{
+						*user_action->action.function(current_screen);
+						}
+
+					break;
+					} // TPGUI_SCREEN
+
+				} // switch (user_action->type)
 
 			} // if (user_action)
 
 
+
 // obs³uga wyœwietlania
+
+		if (screen_update_f)
+			{
+			blinking_cntr= BLINKING_CNTR_MAX;
+			blinking_f= true;
+			blinking_change_f= false;
+
+			// wy³¹cz ekran !!!
+			// wyczyœæ ekran !!!
+			}
+
 
 		switch ((tpgui_screen_s *)current_screen->type)
 			{
@@ -196,18 +264,18 @@ void tpgui_thread(void *params)
 			} // switch ((tpgui_screen_s *)current_screen->type)
 
 
+		if (screen_update_f)
+			{
+			// w³¹cz ekran !!!
+			}
+
+
+
 		screen_update_f= false;
 		blinking_change_f= false;
-
-
 		
 
-		// jeœli zmiana ekranu, wymuœ !!!:
-		// screen_update_f= true;
-
-
-
-		if (!blinking_cntr)
+		if (blinking_cntr != 0)
 			blinking_cntr-= 1;
 		else
 			{
@@ -216,7 +284,7 @@ void tpgui_thread(void *params)
 			blinking_change_f= true;
 			}
 
-
+*/
 		} // while (1)
 
 
@@ -224,7 +292,7 @@ void tpgui_thread(void *params)
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-
+/*
 void tpgui_screen_init(tpgui_screen_s *screen)
 	{
 
@@ -257,9 +325,11 @@ void tpgui_screen_item_add(tpgui_screen_s *screen, tpgui_screen_item_s *item)
 void tpgui_screen_draw(tpgui_screen_s *gui_screen)
 	{
 	wdlist_entry_s *wdlist_entry;
+    struct tm utime_tm;
 
 	if (!gui_screen)
 		return;
+
 
 	wdlist_entry= gui_screen->item_list.first_entry;
 	while (wdlist_entry)
@@ -279,6 +349,49 @@ void tpgui_screen_draw(tpgui_screen_s *gui_screen)
 					} // TPGUI_SI_LABEL
 
 
+				case TPGUI_SI_VARIABLE:
+					{
+					tpgui_screen_item_variable_s *item= (tpgui_screen_item_variable_s *)xitem;
+
+					if (screen_update_f || xitem->changed)
+						{
+
+						switch (item->data_type)
+							{
+
+							case TPGUI_VAR_DATATYPE_INT:
+								{
+								sprintf(item->text, "%*d", item->len, *(int *)item->data_ptr);
+								break;
+								}
+
+							case TPGUI_VAR_DATATYPE_FLOAT:
+								{
+								sprintf(item->text, "%*.*f", item->len, item->precision, *(float *)item->data_ptr);
+								break;
+								}
+
+							case TPGUI_VAR_DATATYPE_TIME:
+								{
+                                localtime_r((time_t *)item->data_ptr, &utime_tm);
+                                strftime(item->text, item->len, "%Y-%m-%d", &utime_tm);
+								break;
+								}
+
+							case TPGUI_VAR_DATATYPE_WDAY:
+								{
+								break;
+								}
+
+
+
+							} // switch (item->data_type)
+
+						}
+                
+					tpgui_x_label_draw((tpgui_screen_item_label_s *)xitem);
+					break;
+					} // TPGUI_SI_VARIABLE
 
 				} // switch (xitem->type)
 
@@ -318,12 +431,17 @@ void tpgui_menu_draw(tpgui_menu_s *gui_menu)
 	{
 	wdlist_entry_s *wdlist_entry;
 	unsigned char item_index= 0;
+	unsigned char row= 0;
+
 
 	if (!gui_menu)
 		return;
 
 	if (screen_update_f)
+		{
+		menu_first_visible_item_index= 0;
 		menu_chosen_item_index= 0;
+		}
 
 	if (screen_update_f || gui_menu->changed)
 		{
@@ -331,22 +449,36 @@ void tpgui_menu_draw(tpgui_menu_s *gui_menu)
 		wdlist_entry= gui_menu->item_list.first_entry;
 		while (wdlist_entry)
 			{
-			tpgui_menu_item_s *xitem= (tpgui_menu_item_s *)wdlist_entry->data;
-			bool chosen= (menu_chosen_item_index == item_index);
-	
-			switch (xitem->type)
-				{
 
-				case TPGUI_MI_LABEL:
+			if ((item_index >= menu_first_visible_item_index) && (item_index < (menu_first_visible_item_index + lcd.rows)))
+				{
+				tpgui_menu_item_s *xitem= (tpgui_menu_item_s *)wdlist_entry->data;
+				bool chosen= (menu_chosen_item_index == item_index);
+
+				switch (xitem->type)
 					{
 
+					case TPGUI_MI_LABEL:
+						{
+						tpgui_screen_item_label_s item_tmp;
 
-					break;
-					}
+						item_tmp.attr= chosen ? TPGUI_ITEM_ATTRIB_INVERT : 0x00;
+						item_tmp.col= 0;
+						item_tmp.row= row;
+						item_tmp.text= (tpgui_menu_item_label_s *)xitem->text;
+						item_tmp.len= 16;
 
+						tpgui_x_label_draw(&item_tmp);
+						row+= 1;
 
-				
-				} // switch (xitem->type)
+						break;
+						}
+
+					} // switch (xitem->type)
+
+				} // if ((item_index ...
+			else
+				break;
 
 			item_index+= 1;
 			wdlist_entry= wdlist_entry->next;
@@ -361,10 +493,117 @@ void tpgui_menu_draw(tpgui_menu_s *gui_menu)
 
 //------------------------------------------------------------------------------
 
-tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char action)
+tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char menu_action)
 	{
+	tpgui_action_s *action= NULL;
+	wdlist_entry_s *wdlist_entry;
+	unsigned char item_index= 0;
+	unsigned char cur_pos; // w zakresie wyœwietlacza
 
-	return NULL;
+	if (!gui_menu || (gui_menu->item_list.entries_number < 1))
+		return NULL;
+
+
+	if (screen_update_f)
+		{
+		menu_first_visible_item_index= 0;
+		menu_chosen_item_index= 0;
+		}
+
+
+	cur_pos= menu_chosen_item_index - menu_first_visible_item_index;
+
+	switch (menu_action)
+		{
+
+		case TPGUI_KEY_PRESS_OK:
+			{
+
+			if (menu_chosen_item_index < gui_menu->item_list.entries_number)
+				{
+				wdlist_entry= gui_menu->item_list.first_entry;
+				while (wdlist_entry)
+					{
+
+					if (menu_chosen_item_index == item_index)
+						{
+						tpgui_menu_item_s *xitem= (tpgui_menu_item_s *)wdlist_entry->data;
+
+						switch (xitem->type)
+							{
+
+							case TPGUI_MI_LABEL:
+								{
+								tpgui_menu_item_label_s *tpgui_menu_item_label= (tpgui_menu_item_label_s *)xitem;
+								action= tpgui_menu_item_label->action;
+								break;
+								} // TPGUI_MI_LABEL
+
+							default:
+								break;
+
+							} // switch (xitem->type)
+
+						break;
+						}
+
+					item_index+= 1;
+					wdlist_entry= wdlist_entry->next;
+					} // while (wdlist_entry)
+
+				}
+
+			break;
+			} // TPGUI_KEY_PRESS_OK
+
+		case TPGUI_KEY_PRESS_UP:
+			{
+
+			if (pos != 0)
+				{
+				// przesuniêcie paska podœwietlenia w górê
+				menu_chosen_item_index-= 1;
+				gui_menu->changed= true;
+				}
+			else
+			if (menu_chosen_item_index > 0)
+				{
+				// przesuniêcie listy
+				menu_chosen_item_index-= 1;
+				menu_first_visible_item_index-= 1;
+				gui_menu->changed= true;
+				}
+
+			break;
+			} // TPGUI_KEY_PRESS_DOWN
+
+		case TPGUI_KEY_PRESS_DOWN:
+			{
+
+			if ((cur_pos < (lcd.rows - 1)) && (menu_chosen_item_index < (gui_menu->item_list.entries_number - 1)))
+				{
+				// przesuniêcie paska podœwietlenia w dó³
+				menu_chosen_item_index+= 1;
+				gui_menu->changed= true;
+				}
+			else
+			if (menu_chosen_item_index < (gui_menu->item_list.entries_number - 1))
+				{
+				// przesuniêcie listy
+				menu_chosen_item_index+= 1;
+				menu_first_visible_item_index+= 1;
+				gui_menu->changed= true;
+				}
+
+			break;
+			} // TPGUI_KEY_PRESS_DOWN
+
+		default:
+			break;
+		} // switch (menu_action)
+
+
+	return action;
 	}
 
 //------------------------------------------------------------------------------
@@ -409,7 +648,7 @@ void tpgui_prim_area_clean()
 
 
 	}
-
+*/
 //------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------

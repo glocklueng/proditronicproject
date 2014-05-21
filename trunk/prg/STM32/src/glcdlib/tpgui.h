@@ -4,13 +4,15 @@
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
+#include <stdbool.h>
+
 #include "wdlist.h"
 
 
 //------------------------------------------------------------------------------
 
 #define TPGUI_SCREEN_REFRESH_PERIOD		((portTickType)50 / portTICK_RATE_MS)	// [ms]
-#define TOGUI_SCREEN_BLINKING_PERIOD	1000 									// [ms]
+#define TPGUI_SCREEN_BLINKING_PERIOD	1000 									// [ms]
 
 #define TPGUI_SCREEN		0x01
 #define TPGUI_MENU			0x02
@@ -18,17 +20,23 @@
 
 
 
-#define TPGUI_KEY_PRESS_OK		0x01
-#define TPGUI_KEY_PRESS_EXIT	0x02
-#define TPGUI_KEY_PRESS_UP		0x04
-#define TPGUI_KEY_PRESS_DOWN	0x08
+#define TPGUI_KEY_PRESS_OK			0x01
+#define TPGUI_KEY_PRESS_EXIT		0x02
+#define TPGUI_KEY_PRESS_UP			0x04
+#define TPGUI_KEY_PRESS_DOWN		0x08
 
+#define TPGUI_VAR_DATATYPE_INT		0x01
+#define TPGUI_VAR_DATATYPE_FLOAT	0x02
+#define TPGUI_VAR_DATATYPE_TIME		0x03
+#define TPGUI_VAR_DATATYPE_DATE		0x04
+#define TPGUI_VAR_DATATYPE_WDAY		0x05
 
 
 
 enum TPGUI_SCREEN_ITEM
 	{
 	TPGUI_SI_LABEL,
+	TPGUI_SI_VARIABLE,
 
 
 	};
@@ -45,10 +53,18 @@ enum TPGUI_MENU_ITEM
 
 //------------------------------------------------------------------------------
 
+
 typedef struct
 	{
 	unsigned char type;
 
+	union
+		{
+		struct tpgui_screen_s *screen;
+		struct tpgui_menu_s *menu;
+		void (*function)(struct tpgui_screen_s *screen);
+
+		} action;
 
 	} tpgui_action_s;
 
@@ -75,9 +91,10 @@ typedef struct
 	{
 	unsigned char type;
 	wdlist_s item_list;
-	
+
 	bool changed;
 
+	tpgui_action_s *up_menu;
 
 	} tpgui_menu_s;
 
@@ -86,7 +103,7 @@ typedef struct
 
 typedef struct
 	{
-	TPGUI_SCREEN_ITEM type;
+	enum TPGUI_SCREEN_ITEM type;
 	bool changed;
 	unsigned char attr;
 
@@ -95,8 +112,7 @@ typedef struct
 
 typedef struct
 	{
-	TPGUI_MENU_ITEM type;
-
+	enum TPGUI_MENU_ITEM type;
 
 	} tpgui_menu_item_s;
 
@@ -108,7 +124,7 @@ typedef struct
 
 typedef struct
 	{
-	TPGUI_SCREEN_ITEM type;
+	enum TPGUI_SCREEN_ITEM type;
 	bool changed;
 	unsigned char attr;
 
@@ -116,10 +132,31 @@ typedef struct
 	unsigned char row;
 	unsigned char len;		// rozmiar (w znakach)
 	
-	unsigned char *text;
-
+	char *text;
 
 	} tpgui_screen_item_label_s;
+
+typedef struct
+	{
+	enum TPGUI_SCREEN_ITEM type;
+	bool changed;
+	unsigned char attr;
+
+	unsigned char col;
+	unsigned char row;
+	unsigned char len;		// rozmiar (w znakach)
+	
+	char *text;
+
+	//----------------------- powy¿ej jak tpgui_screen_item_label_s
+
+	unsigned char data_type;
+	void *data_ptr;
+	char precision;
+
+
+	} tpgui_screen_item_variable_s;
+
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -127,7 +164,11 @@ typedef struct
 
 typedef struct
 	{
-	TPGUI_MENU_ITEM type;
+	enum TPGUI_MENU_ITEM type;
+	unsigned char attr;
+
+	unsigned char *text;
+	tpgui_action_s *action;
 	
 	
 	} tpgui_menu_item_label_s;

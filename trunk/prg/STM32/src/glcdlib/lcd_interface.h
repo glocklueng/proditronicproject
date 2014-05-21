@@ -18,6 +18,12 @@ typedef struct
 	void (*char_draw)(unsigned char code, unsigned char column, unsigned char row, unsigned char attr);
 	void (*region_fill)(unsigned char posx, unsigned char posy, unsigned char width, unsigned char height, unsigned char data);
 
+	unsigned char width;
+	unsigned char height;
+
+	unsigned char cols;
+	unsigned char rows;
+
 	} lcd_handler_s;
 
 
