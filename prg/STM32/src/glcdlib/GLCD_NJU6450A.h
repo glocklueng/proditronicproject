@@ -1,6 +1,12 @@
 #ifndef __GLCD_NJU6450A_H__
 #define __GLCD_NJU6450A_H__
 
+#include <stdbool.h>
+
+#include "stm32f10x.h"
+
+#include "FreeRTOS.h"
+
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
@@ -13,6 +19,8 @@
 
 #define SUBSCREEN_WIDTH			61
 
+#define SCREEN_COLS				20
+#define SCREEN_ROWS				4
 
 //------------------------------------------------------------------------------
 
@@ -20,12 +28,12 @@ void GLCD_NJU6450A_init();
 void GLCD_NJU6450A_screen_clear();
 
 
-void GLCD_NJU6450A_char_draw(unsigned char code, unsigned char column, unsigned char row, unsigned char attr);
+//void GLCD_NJU6450A_char_draw(unsigned char code, unsigned char column, unsigned char row, unsigned char attr);
 
 
 
 
-void GLCD_NJU6450A_region_fill(unsigned char posx, unsigned char posy, unsigned char width, unsigned char height, unsigned char data);
+//void GLCD_NJU6450A_region_fill(unsigned char posx, unsigned char posy, unsigned char width, unsigned char height, unsigned char data);
 
 //------------------------------------------------------------------------------
 
