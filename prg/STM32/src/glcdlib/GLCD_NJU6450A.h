@@ -24,17 +24,6 @@
 
 //------------------------------------------------------------------------------
 
-void GLCD_NJU6450A_init();
-void GLCD_NJU6450A_screen_clear();
-
-
-//void GLCD_NJU6450A_char_draw(unsigned char code, unsigned char column, unsigned char row, unsigned char attr);
-
-
-
-
-//void GLCD_NJU6450A_region_fill(unsigned char posx, unsigned char posy, unsigned char width, unsigned char height, unsigned char data);
-
 //------------------------------------------------------------------------------
 
 #endif // __GLCD_NJU6450A_H__
