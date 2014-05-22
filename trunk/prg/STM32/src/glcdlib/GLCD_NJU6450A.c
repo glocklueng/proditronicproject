@@ -23,20 +23,6 @@
 
 //------------------------------------------------------------------------------
 
-lcd_handler_s lcd=
-	{
-	.init= GLCD_NJU6450A_init,
-	.screen_clear= GLCD_NJU6450A_screen_clear,
-//	.char_draw= GLCD_NJU6450A_char_draw,
-//	.region_fill= GLCD_NJU6450A_region_fill,
-
-	.width= SCREEN_WIDTH,
-	.height= SCREEN_HEIGHT,
-	.cols= SCREEN_COLS,
-	.rows= SCREEN_ROWS,
-
-	};
-
 
 GPIO_InitTypeDef gpio_data;
 
@@ -68,14 +54,54 @@ const unsigned char font2size_tab[16]= {
 
 //------------------------------------------------------------------------------
 
+void GLCD_NJU6450A_init();
+
+void GLCD_NJU6450A_screen_clear();
+void GLCD_NJU6450A_display_on();
+void GLCD_NJU6450A_display_off();
+
+void GLCD_NJU6450A_char_draw(unsigned char code, unsigned char column, unsigned char row, unsigned char attr);
+void GLCD_NJU6450A_region_fill(unsigned char posx, unsigned char posy, unsigned char width, unsigned char height, unsigned char data);
+void GLCD_NJU6450A_bmp_draw(unsigned char posx, unsigned char posy, unsigned char width, unsigned char height, unsigned char attr);
+
+//------------------------------------------------------------------------------
 
 void GLCD_NJU6450A_reset();
-void GLCD_NJU6450A_data_write(unsigned char chip, unsigned char data);
+
+void GLCD_NJU6450A_data_wr(unsigned char chip, unsigned char data);
+void GLCD_NJU6450A_cmd_wr(unsigned char chip, unsigned char data);
+void GLCD_NJU6450A_busy(unsigned char chip);
+
+void GLCD_NJU6450A_column_set(unsigned char column);
+void GLCD_NJU6450A_row_set(unsigned char chip, unsigned char row);
 
 void GLCD_NJU6450A_char1s_draw(unsigned char code, unsigned char column, unsigned char row, bool invert);
 void GLCD_NJU6450A_char2s_draw(unsigned char code, unsigned char column, unsigned char row, bool invert);
 
 void Delay (uint32_t nCount);
+
+//------------------------------------------------------------------------------
+
+
+
+lcd_handler_s lcd=
+	{
+	.init=			GLCD_NJU6450A_init,
+	.screen_clear=	GLCD_NJU6450A_screen_clear,
+	.display_on=	GLCD_NJU6450A_display_on,
+	.display_off=	GLCD_NJU6450A_display_off,
+
+
+	.char_draw=		GLCD_NJU6450A_char_draw,
+	.region_fill=	GLCD_NJU6450A_region_fill,
+
+	.width=			SCREEN_WIDTH,
+	.height=		SCREEN_HEIGHT,
+	.cols=			SCREEN_COLS,
+	.rows=			SCREEN_ROWS,
+
+	};
+
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
@@ -121,7 +147,7 @@ void GLCD_NJU6450A_init()
 
 //------------------------------------------------------------------------------
 
-unsigned char GLCD_NJU6450A_busy(unsigned char chip)
+void GLCD_NJU6450A_busy(unsigned char chip)
 	{
 	static unsigned char result= 0;
 	volatile unsigned short read16;
@@ -242,28 +268,6 @@ void GLCD_NJU6450A_reset()
 	GLCD_NJU6450A_cmd_wr(0, 0x00);	// column
 	GLCD_NJU6450A_cmd_wr(1, 0x00);
 
-/*
-
-	for (page=0;page<4;page++)
-		{
-
-
-		GLCD_NJU6450A_cmd_wr(0, 0x00);	// column
-		GLCD_NJU6450A_cmd_wr(1, 0x00);
-
-		GLCD_NJU6450A_cmd_wr(0, 0xB8 | page); // page
-		GLCD_NJU6450A_cmd_wr(1, 0xB8 | page);
-
-
-		for (x=0;x<61;x++)
-			GLCD_NJU6450A_data_wr(0, (lcdval & 1) ? 0xFF : 0x00);
-
-		for (x=0;x<61;x++)
-			GLCD_NJU6450A_data_wr(1, (lcdval & 1) ? 0xFF : 0x00);
-
-		}
-*/
-
 	}
 
 //------------------------------------------------------------------------------
@@ -271,7 +275,6 @@ void GLCD_NJU6450A_reset()
 void GLCD_NJU6450A_screen_clear()
 	{
 	unsigned char x, y, page;
-	static unsigned char lcdval= 0;
 
 	c1posx= 0xFF;
 	c1posy= 0xFF;
@@ -281,10 +284,11 @@ void GLCD_NJU6450A_screen_clear()
 
 	page= 0;
 
-	for (y=0;y<lcd.rows;y++)
-		{
+	GLCD_NJU6450A_display_off();
 
-		GLCD_NJU6450A_cmd_wr(0, 0xB8 | page); // page
+	for (y=0;y<SCREEN_ROWS;y++)
+		{
+		GLCD_NJU6450A_cmd_wr(0, 0xB8 | page);
 		GLCD_NJU6450A_cmd_wr(1, 0xB8 | page);
 
 		GLCD_NJU6450A_cmd_wr(0, 0x00);	// column
@@ -292,23 +296,31 @@ void GLCD_NJU6450A_screen_clear()
 
 		for (x=0;x<SUBSCREEN_WIDTH;x++)
 			{
-			GLCD_NJU6450A_data_wr(0, (lcdval & 1) ? 0xFF : 0x00);
-			GLCD_NJU6450A_data_wr(1, (lcdval & 1) ? 0xFF : 0x00);
+			GLCD_NJU6450A_data_wr(0, 0x00);
+			GLCD_NJU6450A_data_wr(1, 0x00);
 			}
-
 
 		page+= 1;
 		}
 
-	lcdval= !lcdval ? 1 : 0;
+	GLCD_NJU6450A_display_on();
 
 	}
 
 //------------------------------------------------------------------------------
-/*
-void GLCD_NJU6450A_position_set()
-	{
 
+void GLCD_NJU6450A_display_on()
+	{
+	GLCD_NJU6450A_cmd_wr(0, 0xAF);	// display: ON
+	GLCD_NJU6450A_cmd_wr(1, 0xAF);
+	}
+
+//------------------------------------------------------------------------------
+
+void GLCD_NJU6450A_display_off()
+	{
+	GLCD_NJU6450A_cmd_wr(0, 0xAE);	// display: OFF
+	GLCD_NJU6450A_cmd_wr(1, 0xAE);
 	}
 
 //------------------------------------------------------------------------------
@@ -316,26 +328,39 @@ void GLCD_NJU6450A_position_set()
 void GLCD_NJU6450A_column_set(unsigned char column)
 	{
 	if (column < SUBSCREEN_WIDTH)
-		;
+		{
+		c1posx= column;
+        GLCD_NJU6450A_cmd_wr(0, column);
+		}
 	else
-		; // minus SUBSCREEN_WIDTH
+	if ((column - SUBSCREEN_WIDTH) < SUBSCREEN_WIDTH)
+		{
+		c2posx= column;
+		GLCD_NJU6450A_cmd_wr(1, column - SUBSCREEN_WIDTH);
+		}
 	}
 
 //------------------------------------------------------------------------------
 
 void GLCD_NJU6450A_row_set(unsigned char chip, unsigned char row)
 	{
-	if (chip == 0)
-		;
-	else
-		;
+	if (row < SCREEN_ROWS)
+		{
+		if (chip == 0)
+			{
+			c1posy= row;
+			GLCD_NJU6450A_cmd_wr(0, 0xB8 | row);
+			}
+		else
+			{
+			c2posy= row;
+			GLCD_NJU6450A_cmd_wr(1, 0xB8 | row);
+			}
+		}
 	}
-*/
-//------------------------------------------------------------------------------
-
 
 //------------------------------------------------------------------------------
-/*
+
 void GLCD_NJU6450A_char_draw(unsigned char code, unsigned char column, unsigned char row, unsigned char attr)
 	{
 	if (!(attr & TPGUI_ITEM_ATTRIB_DOUBLESIZE))
@@ -367,30 +392,24 @@ void GLCD_NJU6450A_char1s_draw(unsigned char code, unsigned char column, unsigne
 		// CHIP1 Left
 
 		if (column != c1posx)
-			{
 			GLCD_NJU6450A_column_set(column);
-			c1posx= column;
-			}
 
 		if (row != c1posy)
-			{
 			GLCD_NJU6450A_row_set(0, row);
-			c1posy= row;
-			}
 
 		if (!invert)
 			{
 			for (x=0;x<(FONT_CHAR_WIDTH-1);x++)
-				GLCD_NJU6450A_data_write(0, *char_fontdta++);
+				GLCD_NJU6450A_data_wr(0, *char_fontdta++);
 
-			GLCD_NJU6450A_data_write(0, 0x00);
+			GLCD_NJU6450A_data_wr(0, 0x00);
 			}
 		else
 			{
 			for (x=0;x<(FONT_CHAR_WIDTH-1);x++)
-				GLCD_NJU6450A_data_write(0, 0xFF ^ *char_fontdta++);
+				GLCD_NJU6450A_data_wr(0, 0xFF ^ *char_fontdta++);
 
-			GLCD_NJU6450A_data_write(0, 0xFF);
+			GLCD_NJU6450A_data_wr(0, 0xFF);
 			}
 
 		c1posx+= FONT_CHAR_WIDTH;
@@ -401,30 +420,24 @@ void GLCD_NJU6450A_char1s_draw(unsigned char code, unsigned char column, unsigne
 		// CHIP2 Right
 
 		if (column != c2posx)
-			{
 			GLCD_NJU6450A_column_set(column);
-			c2posx= column;
-			}
 
 		if (row != c2posy)
-			{
 			GLCD_NJU6450A_row_set(1, row);
-			c2posy= row;
-			}
 
 		if (!invert)
 			{
 			for (x=0;x<(FONT_CHAR_WIDTH-1);x++)
-				GLCD_NJU6450A_data_write(1, *char_fontdta++);
+				GLCD_NJU6450A_data_wr(1, *char_fontdta++);
 
-			GLCD_NJU6450A_data_write(1, 0x00);
+			GLCD_NJU6450A_data_wr(1, 0x00);
 			}
 		else
 			{
 			for (x=0;x<(FONT_CHAR_WIDTH-1);x++)
-				GLCD_NJU6450A_data_write(1, 0xFF ^ *char_fontdta++);
+				GLCD_NJU6450A_data_wr(1, 0xFF ^ *char_fontdta++);
 
-			GLCD_NJU6450A_data_write(1, 0xFF);
+			GLCD_NJU6450A_data_wr(1, 0xFF);
 			}
 
 		c2posx+= FONT_CHAR_WIDTH;
@@ -470,16 +483,10 @@ void GLCD_NJU6450A_char2s_draw(unsigned char code, unsigned char column, unsigne
 				// CHIP1 Left
 
 				if (column_t != c1posx)
-					{
 					GLCD_NJU6450A_column_set(column_t);
-					c1posx= column_t;
-					}
 
 				if (row != c1posy)
-					{
 					GLCD_NJU6450A_row_set(0, row);
-					c1posy= row;
-					}
 
 
 				if (x == (FONT_CHAR_WIDTH -1))
@@ -490,8 +497,8 @@ void GLCD_NJU6450A_char2s_draw(unsigned char code, unsigned char column, unsigne
 					char_fontdta++;
 					}
 
-				GLCD_NJU6450A_data_write(0, data2write);
-				GLCD_NJU6450A_data_write(0, data2write);
+				GLCD_NJU6450A_data_wr(0, data2write);
+				GLCD_NJU6450A_data_wr(0, data2write);
 
 				c1posx+= 2;
 				column_t+= 2;
@@ -502,16 +509,10 @@ void GLCD_NJU6450A_char2s_draw(unsigned char code, unsigned char column, unsigne
 				// CHIP2 Right
 
 				if (column_t != c2posx)
-					{
 					GLCD_NJU6450A_column_set(column_t);
-					c2posx= column_t;
-					}
 
 				if (row != c2posy)
-					{
 					GLCD_NJU6450A_row_set(1, row);
-					c2posy= row;
-					}
 
 
 				if (x == (FONT_CHAR_WIDTH -1))
@@ -522,8 +523,8 @@ void GLCD_NJU6450A_char2s_draw(unsigned char code, unsigned char column, unsigne
 					char_fontdta++;
 					}
 
-				GLCD_NJU6450A_data_write(1, data2write);
-				GLCD_NJU6450A_data_write(1, data2write);
+				GLCD_NJU6450A_data_wr(1, data2write);
+				GLCD_NJU6450A_data_wr(1, data2write);
 
 				c2posx+= 2;
 				column_t+= 2;
@@ -576,40 +577,28 @@ void GLCD_NJU6450A_region_fill(unsigned char posx, unsigned char posy, unsigned 
 				// CHIP1 Left
 
 				if (x != c1posx)
-					{
 					GLCD_NJU6450A_column_set(x);
-					c1posx= x;
-					}
 
 				if (posy != c1posy)
-					{
 					GLCD_NJU6450A_row_set(0, posy);
-					c1posy= posy;
-					}
 
 				c1posx+= 1;
 
-				GLCD_NJU6450A_data_write(0, data);
+				GLCD_NJU6450A_data_wr(0, data);
 				}
 			else
 				{
 				// CHIP2 Right
 
 				if (x != c2posx)
-					{
 					GLCD_NJU6450A_column_set(x);
-					c2posx= x;
-					}
 
 				if (posy != c2posy)
-					{
 					GLCD_NJU6450A_row_set(1, posy);
-					c2posy= posy;
-					}
 
 				c2posx+= 1;
 
-				GLCD_NJU6450A_data_write(1, data);
+				GLCD_NJU6450A_data_wr(1, data);
 				}
 
 			x+= 1;
@@ -628,7 +617,51 @@ void GLCD_NJU6450A_region_fill(unsigned char posx, unsigned char posy, unsigned 
 	c2posy= 0xFF;
 
 	}
-*/
+
+//------------------------------------------------------------------------------
+
+void GLCD_NJU6450A_bmp_draw(unsigned char posx, unsigned char posy, unsigned char width, unsigned char height, unsigned char attr, unsigned char *bmpptr)
+	{
+	unsigned char posx_end, posy_end;
+	unsigned char x, y;
+
+	c1posx= 0xFF;
+	c1posy= 0xFF;
+
+	c2posx= 0xFF;
+	c2posy= 0xFF;
+
+	posx_end= posx + width;
+	posy_end= posy + height;
+
+	if ((posx >= SCREEN_WIDTH) || (posx_end >= SCREEN_WIDTH))
+		return;
+
+	if ((posy >= (SCREEN_HEIGHT / SCREEN_LINES_PER_ROW)) || (posy_end >= (SCREEN_HEIGHT / SCREEN_LINES_PER_ROW)))
+		return;
+	
+	for (y=posy;y<posy_end;y++)
+		{
+
+		if (posx < SUBSCREEN_WIDTH)
+			GLCD_NJU6450A_row_set(0, y);
+
+		if (posx_end > SUBSCREEN_WIDTH)
+			GLCD_NJU6450A_row_set(0, y);
+
+		for (x=0;x<width;x++)
+			{
+
+
+
+
+			}
+
+		}
+	
+
+	}
+
 //------------------------------------------------------------------------------
 
 void Delay (uint32_t nCount)
