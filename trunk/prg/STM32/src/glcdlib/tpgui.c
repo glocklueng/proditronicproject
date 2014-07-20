@@ -3,11 +3,11 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-
+#include <time.h>
 
 #include "lcd_interface.h"
 #include "tpgui.h"
-
+#include "font5x7V.h"
 
 //------------------------------------------------------------------------------
 
@@ -26,7 +26,9 @@ extern lcd_handler_s lcd;
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
-#define BLINKING_CNTR_MAX	((TOGUI_SCREEN_BLINKING_PERIOD / TPGUI_SCREEN_REFRESH_PERIOD / 2) - 1)
+
+#define BLINKING_CNTR_MAX	((TPGUI_SCREEN_BLINKING_PERIOD / TPGUI_SCREEN_REFRESH_PERIOD / 2) - 1)
+#define ANIMATION_CNTR_MAX	((TPGUI_SCREEN_ANIMATION_PERIOD / TPGUI_SCREEN_REFRESH_PERIOD / 2) - 1)
 
 
 //------------------------------------------------------------------------------
@@ -34,8 +36,11 @@ extern lcd_handler_s lcd;
 
 bool blinking_f;			// 1 - visible, 0 - not visible
 bool blinking_change_f;		// state changed
+bool animation_change_f;	// state changed
 
 bool screen_update_f;
+
+unsigned char npage;
 
 unsigned char menu_first_visible_item_index;
 unsigned char menu_chosen_item_index;
@@ -51,7 +56,7 @@ tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char menu_act
 
 
 void tpgui_x_label_draw(tpgui_screen_item_label_s *item);
-
+void tpgui_x_bmp_draw(tpgui_screen_item_bmp_s *item);
 
 
 void tpgui_prim_text_draw(tpgui_screen_item_label_s *item);;
@@ -59,6 +64,11 @@ void tpgui_prim_text_draw(tpgui_screen_item_label_s *item);;
 
 void tpgui_prim_area_clean();
 
+
+
+
+
+//------------------------------------------------------------------------------
 
 
 
@@ -71,6 +81,18 @@ void tpgui_run(void *start_screen)
 	if (!start_screen)
 		return;
 
+	//tpgui_screen_init(&main_screen);
+/*
+	main_screen_label1.type= TPGUI_SI_LABEL;
+	main_screen_label1.attr= 0x00;
+	main_screen_label1.col= 0;
+	main_screen_label1.row= 0;
+	main_screen_label1.len= 10;
+	main_screen_label1.text= "napistestowy";
+
+	tpgui_screen_item_add(&main_screen, (tpgui_screen_item_s *)&main_screen_label1);
+*/
+
 
 	xTaskCreate(tpgui_thread, "gui", 512, (void *)start_screen, tskIDLE_PRIORITY, NULL);
 
@@ -82,20 +104,35 @@ void tpgui_thread(void *params)
 	{
 	void *current_screen= params;
 	bool lcd_reset= true;
+
 	unsigned char blinking_cntr;
+	unsigned char animation_cntr;
+
 
 	unsigned char key_pressed;
 	unsigned char key_long_pressed;
 	tpgui_action_s *user_action;
-/*
+
+	int menu_cntr=0;
+
+
+	int contr_cntr =0;
+	uint8_t contr_val= 0;
+
+	bool val= false;
+
 	blinking_cntr= BLINKING_CNTR_MAX;
 	blinking_f= true;
 	blinking_change_f= false;
 
-	screen_update_f= true;
-*/
+	animation_cntr= ANIMATION_CNTR_MAX;
+	animation_change_f= false;
 
-	GLCD_NJU6450A_init();
+	screen_update_f= true;
+
+
+
+
 
 
 	while (1)
@@ -104,31 +141,34 @@ void tpgui_thread(void *params)
 		if (lcd_reset)
 			{
 			lcd.init();
+			lcd.screen_clear();
+
+			lcd.contrast_set(40);
+			lcd.backlight_set(40);
 
 			lcd_reset= false;
 			}
 
-//        vTaskDelay(TPGUI_SCREEN_REFRESH_PERIOD);
-        vTaskDelay(4000);
+        vTaskDelay(TPGUI_SCREEN_REFRESH_PERIOD);
+//        vTaskDelay(3000);
 
-
-		lcd.screen_clear();
 
 		user_action= NULL;
+		menu_cntr++;
+		contr_cntr++;
 
 
-		printf("!\n");
 
-/*
+
 // obs³uga klawiszy
 
-		key_pressed= tpgui_key_pressed();
+		key_pressed= 0;// tpgui_key_pressed();
 
-		if (key_pressed)
+		//if (key_pressed)
 			{
-			key_long_pressed= tpgui_key_long_pressed();
+			key_long_pressed= 0;//tpgui_key_long_pressed();
 
-			switch ((tpgui_screen_s *)current_screen->type)
+			switch (((tpgui_screen_s *)current_screen)->type)
 				{
 
 				case TPGUI_SCREEN:
@@ -166,6 +206,19 @@ void tpgui_thread(void *params)
 					else
 					if (key_pressed & TPGUI_KEY_PRESS_OK)
 						menu_action= TPGUI_KEY_PRESS_OK;
+
+
+					if (menu_cntr == 100)
+						{
+						printf("line: %d\n", __LINE__);
+
+						menu_cntr= 0;
+						menu_action= TPGUI_KEY_PRESS_DOWN;
+						}
+
+
+
+
 
 					if (menu_action)
 						user_action= tpgui_menu_action(menu, menu_action);
@@ -219,7 +272,7 @@ void tpgui_thread(void *params)
 
 					if (user_action->action.function)
 						{
-						*user_action->action.function(current_screen);
+				//		*user_action->action.function(current_screen);
 						}
 
 					break;
@@ -239,12 +292,14 @@ void tpgui_thread(void *params)
 			blinking_f= true;
 			blinking_change_f= false;
 
-			// wy³¹cz ekran !!!
-			// wyczyœæ ekran !!!
+			animation_cntr= ANIMATION_CNTR_MAX;
+			animation_change_f= false;
+
+			lcd.screen_clear();
 			}
 
 
-		switch ((tpgui_screen_s *)current_screen->type)
+		switch (((tpgui_screen_s *)current_screen)->type)
 			{
 
 			case TPGUI_SCREEN:
@@ -284,7 +339,19 @@ void tpgui_thread(void *params)
 			blinking_change_f= true;
 			}
 
-*/
+		if (animation_cntr != 0)
+			animation_cntr-= 1;
+		else
+			{
+			animation_cntr= ANIMATION_CNTR_MAX;
+			animation_change_f= true;
+			}
+		
+
+
+
+
+
 		} // while (1)
 
 
@@ -292,7 +359,7 @@ void tpgui_thread(void *params)
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-/*
+
 void tpgui_screen_init(tpgui_screen_s *screen)
 	{
 
@@ -307,17 +374,26 @@ void tpgui_screen_init(tpgui_screen_s *screen)
 
 void tpgui_screen_item_add(tpgui_screen_s *screen, tpgui_screen_item_s *item)
 	{
-	wdlist_entry_s *wdlist_entry;
 
 	if (!screen || !item)
 		return;
 
 	item->changed= true;
 
-	wdlist_entry= (wdlist_entry_s *)malloc(sizeof(wdlist_entry_s));
-	wdlist_entry->data= (void *)item;
-	wdlist_append(&screen->item_list, wdlist_entry);
+	switch (item->type)
+		{
 
+		case TPGUI_SI_VARIABLE:
+			{
+			tpgui_screen_item_variable_s *xitem= (tpgui_screen_item_variable_s *)item;
+			xitem->text= (char *)malloc(xitem->len + 1);
+			break;
+			}
+
+		} // switch (item->type)
+
+
+	wdlist_append(&screen->item_list, (void *)item);
 	}
 
 //------------------------------------------------------------------------------
@@ -325,79 +401,102 @@ void tpgui_screen_item_add(tpgui_screen_s *screen, tpgui_screen_item_s *item)
 void tpgui_screen_draw(tpgui_screen_s *gui_screen)
 	{
 	wdlist_entry_s *wdlist_entry;
-    struct tm utime_tm;
 
 	if (!gui_screen)
 		return;
-
 
 	wdlist_entry= gui_screen->item_list.first_entry;
 	while (wdlist_entry)
 		{
 		tpgui_screen_item_s *xitem= (tpgui_screen_item_s *)wdlist_entry->data;
 
-		if (screen_update_f || xitem->changed || (blinking_change_f && (xitem->attr & TPGUI_ITEM_ATTRIB_BLINKING)))
+		switch (xitem->type)
 			{
 
-			switch (xitem->type)
+			case TPGUI_SI_LABEL:
 				{
 
-				case TPGUI_SI_LABEL:
+				if (screen_update_f || xitem->changed || (blinking_change_f && (xitem->attr & TPGUI_ITEM_ATTRIB_BLINKING)))
 					{
 					tpgui_x_label_draw((tpgui_screen_item_label_s *)xitem);
-					break;
-					} // TPGUI_SI_LABEL
+					xitem->changed= false;
+					}
+
+				break;
+				} // TPGUI_SI_LABEL
 
 
-				case TPGUI_SI_VARIABLE:
+			case TPGUI_SI_VARIABLE:
+				{
+				tpgui_screen_item_variable_s *item= (tpgui_screen_item_variable_s *)xitem;
+
+				if (screen_update_f || xitem->changed || (blinking_change_f && (xitem->attr & TPGUI_ITEM_ATTRIB_BLINKING)))
 					{
-					tpgui_screen_item_variable_s *item= (tpgui_screen_item_variable_s *)xitem;
 
-					if (screen_update_f || xitem->changed)
+					switch (item->data_type)
 						{
 
-						switch (item->data_type)
+						case TPGUI_VAR_DATATYPE_INT:
 							{
+							sprintf(item->text, "%*d", item->len, *(int *)item->data_ptr);
+							break;
+							}
 
-							case TPGUI_VAR_DATATYPE_INT:
-								{
-								sprintf(item->text, "%*d", item->len, *(int *)item->data_ptr);
-								break;
-								}
+						case TPGUI_VAR_DATATYPE_FLOAT:
+							{
+							sprintf(item->text, "%*.*f", item->len, item->precision, *(float *)item->data_ptr);
+							break;
+							}
 
-							case TPGUI_VAR_DATATYPE_FLOAT:
-								{
-								sprintf(item->text, "%*.*f", item->len, item->precision, *(float *)item->data_ptr);
-								break;
-								}
+						case TPGUI_VAR_DATATYPE_TIME:
+							{
+							strftime(item->text, item->len + 1, "%H:%M:%S", (struct tm *)item->data_ptr);
+							break;
+							}
 
-							case TPGUI_VAR_DATATYPE_TIME:
-								{
-                                localtime_r((time_t *)item->data_ptr, &utime_tm);
-                                strftime(item->text, item->len, "%Y-%m-%d", &utime_tm);
-								break;
-								}
+						case TPGUI_VAR_DATATYPE_DATE:
+							{
+							strftime(item->text, item->len + 1, "%Y-%m-%d", (struct tm *)item->data_ptr);
+							break;
+							}
 
-							case TPGUI_VAR_DATATYPE_WDAY:
-								{
-								break;
-								}
-
+						case TPGUI_VAR_DATATYPE_WDAY:
+							{
+							break;
+							}
 
 
-							} // switch (item->data_type)
+						} // switch (item->data_type)
 
-						}
-                
 					tpgui_x_label_draw((tpgui_screen_item_label_s *)xitem);
-					break;
-					} // TPGUI_SI_VARIABLE
+					xitem->changed= false;
 
-				} // switch (xitem->type)
+					} // if (screen_update_f || xitem->changed || (blinking_change_f && (xitem->attr & TPGUI_ITEM_ATTRIB_BLINKING)))
 
-			xitem->changed= false;
+				break;
+				} // TPGUI_SI_VARIABLE
 
-			} // if (screen_update_f ...)
+
+			case TPGUI_SI_BITMAP:
+				{
+				tpgui_screen_item_bmp_s *item= (tpgui_screen_item_bmp_s *)xitem;
+
+				if (screen_update_f || animation_change_f || (blinking_change_f && (xitem->attr & TPGUI_ITEM_ATTRIB_BLINKING)))
+					{
+
+					if (screen_update_f)
+						item->curr_page= 0;
+
+					tpgui_x_bmp_draw((tpgui_screen_item_bmp_s *)xitem);
+
+					} // if (screen_update_f || xitem->changed)
+
+				break;
+				} // TPGUI_SI_BITMAP
+
+			} // switch (xitem->type)
+		
+
 
 		wdlist_entry= wdlist_entry->next;
 		} // while (wdlist_entry)
@@ -423,8 +522,57 @@ void tpgui_x_label_draw(tpgui_screen_item_label_s *item)
 
 	}
 
+//------------------------------------------------------------------------------
+
+void tpgui_x_bmp_draw(tpgui_screen_item_bmp_s *item)
+	{
+
+	if ((item->npage == 0) || (item->width == 0) || (item->height == 0))
+		return;
+
+	if (item->curr_page >= npage)
+		item->curr_page= 0;
+
+
+	if ((item->attr & TPGUI_ITEM_ATTRIB_BLINKING) && !blinking_f)
+		{
+		// wyczyœæ
+		lcd.region_fill(item->col + 1, item->row, item->width, item->height, 0x00);
+		}
+	else
+		{
+		unsigned char *page_data= (npage == 1) ? item->data : &item->data[item->curr_page * item->width * item->height];
+		lcd.bmp_draw(item->col + 1, item->row, item->width, item->height, item->attr, page_data);
+
+		item->curr_page= (item->curr_page < (item->npage - 1)) ? (item->curr_page + 1) : 0;
+		}
+
+	}
 
 //------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
+void tpgui_menu_init(tpgui_menu_s *menu)
+	{
+
+	if (!menu)
+		return;
+
+	wdlist_init(&menu->item_list);
+
+	}
+
+//------------------------------------------------------------------------------
+
+void tpgui_menu_item_add(tpgui_menu_s *menu, tpgui_menu_item_s *item)
+	{
+
+	if (!menu || !item)
+		return;
+
+	wdlist_append(&menu->item_list, (void *)item);
+	}
+
 //------------------------------------------------------------------------------
 
 void tpgui_menu_draw(tpgui_menu_s *gui_menu)
@@ -432,6 +580,7 @@ void tpgui_menu_draw(tpgui_menu_s *gui_menu)
 	wdlist_entry_s *wdlist_entry;
 	unsigned char item_index= 0;
 	unsigned char row= 0;
+	unsigned char item_drawn= 0;
 
 
 	if (!gui_menu)
@@ -446,27 +595,36 @@ void tpgui_menu_draw(tpgui_menu_s *gui_menu)
 	if (screen_update_f || gui_menu->changed)
 		{
 
+		printf("line: %d\n", __LINE__);
+
 		wdlist_entry= gui_menu->item_list.first_entry;
 		while (wdlist_entry)
 			{
+
+			printf("line: %d\n", __LINE__);
 
 			if ((item_index >= menu_first_visible_item_index) && (item_index < (menu_first_visible_item_index + lcd.rows)))
 				{
 				tpgui_menu_item_s *xitem= (tpgui_menu_item_s *)wdlist_entry->data;
 				bool chosen= (menu_chosen_item_index == item_index);
 
+				item_drawn+= 1;
+
+				printf("line: %d  %d\n", __LINE__, item_drawn);
+
 				switch (xitem->type)
 					{
 
 					case TPGUI_MI_LABEL:
 						{
+						tpgui_menu_item_label_s *item=(tpgui_menu_item_label_s *)xitem;
 						tpgui_screen_item_label_s item_tmp;
 
 						item_tmp.attr= chosen ? TPGUI_ITEM_ATTRIB_INVERT : 0x00;
 						item_tmp.col= 0;
 						item_tmp.row= row;
-						item_tmp.text= (tpgui_menu_item_label_s *)xitem->text;
-						item_tmp.len= 16;
+						item_tmp.text= item->text;
+						item_tmp.len= SCREEN_COLS;
 
 						tpgui_x_label_draw(&item_tmp);
 						row+= 1;
@@ -478,10 +636,20 @@ void tpgui_menu_draw(tpgui_menu_s *gui_menu)
 
 				} // if ((item_index ...
 			else
-				break;
+				{
+				printf("line: %d\n", __LINE__);
+				//break;
+				}
 
 			item_index+= 1;
 			wdlist_entry= wdlist_entry->next;
+
+
+			if (item_drawn == lcd.rows)
+				{
+				printf("line: %d  break\n", __LINE__);
+				break;
+				}
 
 			} // while (wdlist_entry)
 
@@ -500,9 +668,12 @@ tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char menu_act
 	unsigned char item_index= 0;
 	unsigned char cur_pos; // w zakresie wyœwietlacza
 
+	printf("line: %d\n", __LINE__);
+
 	if (!gui_menu || (gui_menu->item_list.entries_number < 1))
 		return NULL;
 
+	printf("line: %d\n", __LINE__);
 
 	if (screen_update_f)
 		{
@@ -555,7 +726,7 @@ tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char menu_act
 
 			break;
 			} // TPGUI_KEY_PRESS_OK
-
+/*
 		case TPGUI_KEY_PRESS_UP:
 			{
 
@@ -576,15 +747,19 @@ tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char menu_act
 
 			break;
 			} // TPGUI_KEY_PRESS_DOWN
-
+*/
 		case TPGUI_KEY_PRESS_DOWN:
 			{
+
+			printf("line: %d\n", __LINE__);
 
 			if ((cur_pos < (lcd.rows - 1)) && (menu_chosen_item_index < (gui_menu->item_list.entries_number - 1)))
 				{
 				// przesuniêcie paska podœwietlenia w dó³
 				menu_chosen_item_index+= 1;
 				gui_menu->changed= true;
+				printf("line: %d\n", __LINE__);
+
 				}
 			else
 			if (menu_chosen_item_index < (gui_menu->item_list.entries_number - 1))
@@ -593,6 +768,8 @@ tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char menu_act
 				menu_chosen_item_index+= 1;
 				menu_first_visible_item_index+= 1;
 				gui_menu->changed= true;
+				printf("line: %d\n", __LINE__);
+
 				}
 
 			break;
@@ -622,7 +799,7 @@ void tpgui_prim_text_draw(tpgui_screen_item_label_s *item)
     
 	charptr= item->text;
 	col= item->col;
-    
+
 	for (x=0;x<item->len;x++)
 		{
 		if (*charptr == 0x00)
@@ -648,7 +825,7 @@ void tpgui_prim_area_clean()
 
 
 	}
-*/
+
 //------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------

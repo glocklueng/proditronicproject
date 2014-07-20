@@ -1,6 +1,8 @@
 #ifndef __LCD_INTERFACE_H__
 #define __LCD_INTERFACE_H__
 
+#include <stdint.h>
+
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
@@ -19,6 +21,11 @@ typedef struct
 
 	void (*char_draw)(unsigned char code, unsigned char column, unsigned char row, unsigned char attr);
 	void (*region_fill)(unsigned char posx, unsigned char posy, unsigned char width, unsigned char height, unsigned char data);
+	void (*bmp_draw)(unsigned char posx, unsigned char posy, unsigned char width, unsigned char height, unsigned char attr, unsigned char *bmpptr);
+
+	void (*contrast_set)(uint8_t value);
+	void (*backlight_set)(uint8_t value);
+
 
 	unsigned char width;
 	unsigned char height;
