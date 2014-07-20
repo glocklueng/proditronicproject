@@ -13,6 +13,8 @@
 
 #define TPGUI_SCREEN_REFRESH_PERIOD		((portTickType)50 / portTICK_RATE_MS)	// [ms]
 #define TPGUI_SCREEN_BLINKING_PERIOD	1000 									// [ms]
+#define TPGUI_SCREEN_ANIMATION_PERIOD	1000 									// [ms]
+
 
 #define TPGUI_SCREEN		0x01
 #define TPGUI_MENU			0x02
@@ -35,8 +37,9 @@
 
 enum TPGUI_SCREEN_ITEM
 	{
-	TPGUI_SI_LABEL,
+	TPGUI_SI_LABEL=4,
 	TPGUI_SI_VARIABLE,
+	TPGUI_SI_BITMAP,
 
 
 	};
@@ -146,7 +149,7 @@ typedef struct
 	unsigned char row;
 	unsigned char len;		// rozmiar (w znakach)
 	
-	char *text;
+	char *text;				// inicjowane w funkcji tpgui_screen_item_add
 
 	//----------------------- powy¿ej jak tpgui_screen_item_label_s
 
@@ -156,6 +159,24 @@ typedef struct
 
 
 	} tpgui_screen_item_variable_s;
+
+typedef struct
+	{
+	enum TPGUI_SCREEN_ITEM type;
+	bool changed;	// not used
+	unsigned char attr;
+
+	unsigned char col;
+	unsigned char row;
+	unsigned char width;
+	unsigned char height;
+
+	unsigned char *data;
+	unsigned char npage;
+	unsigned char curr_page;
+
+
+	} tpgui_screen_item_bmp_s;
 
 
 //------------------------------------------------------------------------------
@@ -186,6 +207,10 @@ void tpgui_run(void *start_screen);
 
 void tpgui_screen_init(tpgui_screen_s *screen);
 void tpgui_screen_item_add(tpgui_screen_s *screen, tpgui_screen_item_s *item);
+
+void tpgui_menu_init(tpgui_menu_s *menu);
+void tpgui_menu_item_add(tpgui_menu_s *menu, tpgui_menu_item_s *item);
+
 
 
 //------------------------------------------------------------------------------
