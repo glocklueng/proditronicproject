@@ -25,11 +25,8 @@ typedef struct
 void keyboard_init();
 void keyboard_run();
 
-
 void keyboard_key_add(uint8_t key_code, uint32_t peripheral_addr, uint16_t key_pin);
 bool keyboard_key_get(key_s *key);
-
-
 
 
 //------------------------------------------------------------------------------
