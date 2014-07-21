@@ -7,6 +7,8 @@
 
 #include "lcd_interface.h"
 #include "tpgui.h"
+#include "keyboard.h"
+
 #include "font5x7V.h"
 
 //------------------------------------------------------------------------------
@@ -113,6 +115,8 @@ void tpgui_thread(void *params)
 	unsigned char key_long_pressed;
 	tpgui_action_s *user_action;
 
+	key_s key_info;
+
 	int menu_cntr=0;
 
 
@@ -162,11 +166,12 @@ void tpgui_thread(void *params)
 
 // obs³uga klawiszy
 
-		key_pressed= 0;// tpgui_key_pressed();
-
-		//if (key_pressed)
+		if (keyboard_key_get(&key_info))
 			{
 			key_long_pressed= 0;//tpgui_key_long_pressed();
+
+			printf("key: %02X %02X\n", key_info.key_code, key_info.key_action);
+
 
 			switch (((tpgui_screen_s *)current_screen)->type)
 				{
@@ -195,30 +200,17 @@ void tpgui_thread(void *params)
 					tpgui_menu_s *menu= (tpgui_menu_s *)current_screen;
 					unsigned char menu_action= 0x00;
 
-					if (key_pressed & TPGUI_KEY_PRESS_EXIT)
+					if (key_info.key_code ==  TPGUI_KEY_PRESS_EXIT)
 						user_action= menu->up_menu;
 					else
-					if (key_pressed & TPGUI_KEY_PRESS_UP)
+					if (key_info.key_code == TPGUI_KEY_PRESS_UP)
 						menu_action= TPGUI_KEY_PRESS_UP;
 					else
-					if (key_pressed & TPGUI_KEY_PRESS_DOWN)
+					if (key_info.key_code == TPGUI_KEY_PRESS_DOWN)
 						menu_action= TPGUI_KEY_PRESS_DOWN;
 					else
-					if (key_pressed & TPGUI_KEY_PRESS_OK)
+					if (key_info.key_code == TPGUI_KEY_PRESS_OK)
 						menu_action= TPGUI_KEY_PRESS_OK;
-
-
-					if (menu_cntr == 100)
-						{
-						printf("line: %d\n", __LINE__);
-
-						menu_cntr= 0;
-						menu_action= TPGUI_KEY_PRESS_DOWN;
-						}
-
-
-
-
 
 					if (menu_action)
 						user_action= tpgui_menu_action(menu, menu_action);
@@ -231,7 +223,8 @@ void tpgui_thread(void *params)
 
 				} // (tpgui_screen_s *)current_screen->type
 
-			} // if (key_pressed)
+			} // keyboard_key_get
+
 
 
 		if (user_action)
@@ -726,11 +719,11 @@ tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char menu_act
 
 			break;
 			} // TPGUI_KEY_PRESS_OK
-/*
+
 		case TPGUI_KEY_PRESS_UP:
 			{
 
-			if (pos != 0)
+			if (cur_pos != 0)
 				{
 				// przesuniêcie paska podœwietlenia w górê
 				menu_chosen_item_index-= 1;
@@ -747,7 +740,7 @@ tpgui_action_s *tpgui_menu_action(tpgui_menu_s *gui_menu, unsigned char menu_act
 
 			break;
 			} // TPGUI_KEY_PRESS_DOWN
-*/
+
 		case TPGUI_KEY_PRESS_DOWN:
 			{
 
