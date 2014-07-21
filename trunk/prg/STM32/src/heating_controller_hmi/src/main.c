@@ -29,6 +29,8 @@
 #include "stm32rtc.h"
 #include "sdio_sd.h"
 #include "tpgui.h"
+#include "keyboard.h"
+
 
 #include "global.h"
 #include "display_struct.c"
@@ -188,6 +190,14 @@ int main()
 
 	tpgui_run(&main_menu);
 
+	keyboard_init();
+	keyboard_key_add(0x10, (uint32_t)GPIOC, GPIO_Pin_0);
+	keyboard_key_add(0x12, (uint32_t)GPIOC, GPIO_Pin_1);
+	keyboard_key_add(0x11, (uint32_t)GPIOC, GPIO_Pin_2);
+	keyboard_key_add(0x13, (uint32_t)GPIOC, GPIO_Pin_3);
+
+	keyboard_run();
+
 
 // odczyt konfiguracji
 
@@ -235,6 +245,7 @@ void GPIO_Configuration(void)
 
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM5, ENABLE); 	// LCD PWM
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE); 	// LCD PWM Contrast, PWM Backlight
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
 
 
 
