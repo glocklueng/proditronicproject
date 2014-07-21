@@ -1,18 +1,22 @@
-
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdlib.h>
 
 #include <FreeRTOS.h>
 #include <task.h>
 #include <queue.h>
 
+#include "stm32f10x.h"
 
 #include "wdlist.h"
+#include "keyboard.h"
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
 #define KEYB_SAMPLING_PERIOD				20		// [ms]
-#define KEYB_SHORT_PUSH_TIME				250		// [ms]
-#define KEYB_LONG_PUSH_TIME					1000	// [ms]
+#define KEYB_SHORT_PUSH_TIME				20		// [ms]
+#define KEYB_LONG_PUSH_TIME					500		// [ms]
 #define KEYB_PUSH_REPEATEDLY_TIME			500		// [ms]
 
 
@@ -44,6 +48,7 @@ wdlist_s key_list;
 xQueueHandle key_queue;
 key_s key_event;
 
+
 //------------------------------------------------------------------------------
 
 void keyboard_thread(void *params);
@@ -68,7 +73,6 @@ void keyboard_init()
 void keyboard_run()
 	{
 
-
     xTaskCreate(keyboard_thread, "key", 512, NULL, tskIDLE_PRIORITY, NULL);
 
 	}
@@ -86,7 +90,7 @@ void keyboard_key_add(uint8_t key_code, uint32_t peripheral_addr, uint16_t key_p
 	key->peripheral_addr= peripheral_addr;
 	key->key_pin= key_pin;
 
-	key->key_code= BUTTON_STATE_RELEASED;
+	key->state= BUTTON_STATE_RELEASED;
 	key->cntr= 0;
 
 
@@ -117,8 +121,8 @@ void keyboard_thread(void *params)
 	{
     wdlist_entry_s *entry;
 	keydef_s *key;
+	GPIO_TypeDef *gpio;
 	bool pushing;
-
 
 	vTaskDelay(1000); // czekam na podci¹gniêcie wejœæ do plusa
 
@@ -128,12 +132,13 @@ void keyboard_thread(void *params)
 
         vTaskDelay(KEYB_SAMPLING_PERIOD);
 
-		
 		entry= key_list.first_entry;
 		while (entry)
 			{
 			key= (keydef_s *)entry->data;
-			pushing= ((GPIO_TypeDef *)(key->peripheral_addr)->IDR & key->key_pin) ? 0 : 1; // 1 - push
+			gpio= (GPIO_TypeDef *)key->peripheral_addr;
+
+			pushing= (gpio->IDR & key->key_pin) ? 0 : 1; // 1 - push
 
 
 			if (pushing)
@@ -163,6 +168,8 @@ void keyboard_thread(void *params)
 							key_event.key_code= key->key_code;
 							key_event.key_action= KEY_ACTION_LONG_PRESSED;
                             xQueueSend(key_queue, &key_event, 0);
+
+							printf("PUSHED: KEY_ACTION_LONG_PRESSED\n");
 							}
 
 						break;
@@ -178,6 +185,8 @@ void keyboard_thread(void *params)
 							key_event.key_code= key->key_code;
 							key_event.key_action= KEY_ACTION_REPEATEDLY_PRESSED;
 							xQueueSend(key_queue, &key_event, 0);
+
+							printf("PUSHED: KEY_ACTION_REPEATEDLY_PRESSED\n");
 							}
 
 						break;
@@ -208,6 +217,9 @@ void keyboard_thread(void *params)
 							key_event.key_code= key->key_code;
 							key_event.key_action= KEY_ACTION_LONG_PRESSED;
 							xQueueSend(key_queue, &key_event, 0);
+
+
+							printf("RELEASED: KEY_ACTION_LONG_PRESSED\n");
 							}
 						else
 						if (key->cntr >= (KEYB_SHORT_PUSH_TIME / KEYB_SAMPLING_PERIOD))
@@ -215,6 +227,8 @@ void keyboard_thread(void *params)
 							key_event.key_code= key->key_code;
 							key_event.key_action= KEY_ACTION_SHORT_PRESSED;
 							xQueueSend(key_queue, &key_event, 0);
+
+							printf("RELEASED: KEY_ACTION_SHORT_PRESSED\n");
 							}
 
 						break;
@@ -228,6 +242,8 @@ void keyboard_thread(void *params)
 							key_event.key_code= key->key_code;
 							key_event.key_action= KEY_ACTION_REPEATEDLY_PRESSED;
 							xQueueSend(key_queue, &key_event, 0);
+
+							printf("RELEASED: KEY_ACTION_REPEATEDLY_PRESSED\n");
 							}
 
 						break;
