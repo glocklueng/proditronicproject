@@ -76,6 +76,8 @@ typedef struct
 	{
 	unsigned char type;
 	wdlist_s item_list;
+
+	bool repeatedly_action_permitted;
 	
 	tpgui_action_s *keyOK_action;
 	tpgui_action_s *keyEX_action;

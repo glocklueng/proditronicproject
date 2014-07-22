@@ -112,18 +112,10 @@ void tpgui_thread(void *params)
 
 
 	unsigned char key_pressed;
-	unsigned char key_long_pressed;
 	tpgui_action_s *user_action;
-
 	key_s key_info;
 
-	int menu_cntr=0;
 
-
-	int contr_cntr =0;
-	uint8_t contr_val= 0;
-
-	bool val= false;
 
 	blinking_cntr= BLINKING_CNTR_MAX;
 	blinking_f= true;
@@ -154,12 +146,9 @@ void tpgui_thread(void *params)
 			}
 
         vTaskDelay(TPGUI_SCREEN_REFRESH_PERIOD);
-//        vTaskDelay(3000);
 
 
 		user_action= NULL;
-		menu_cntr++;
-		contr_cntr++;
 
 
 
@@ -168,7 +157,6 @@ void tpgui_thread(void *params)
 
 		if (keyboard_key_get(&key_info))
 			{
-			key_long_pressed= 0;//tpgui_key_long_pressed();
 
 			printf("key: %02X %02X\n", key_info.key_code, key_info.key_action);
 
@@ -180,17 +168,50 @@ void tpgui_thread(void *params)
 					{
 					tpgui_screen_s *screen= (tpgui_screen_s *)current_screen;
 
-					if (key_pressed & TPGUI_KEY_PRESS_EXIT)
-						user_action= (key_long_pressed & TPGUI_KEY_PRESS_EXIT) ? screen->keyEXl_action : screen->keyEX_action;
-					else
-					if (key_pressed & TPGUI_KEY_PRESS_UP)
-						user_action= (key_long_pressed & TPGUI_KEY_PRESS_UP) ? screen->keyUPl_action : screen->keyUP_action;
-					else
-					if (key_pressed & TPGUI_KEY_PRESS_DOWN)
-						user_action= (key_long_pressed & TPGUI_KEY_PRESS_DOWN) ? screen->keyDWl_action : screen->keyDW_action;
-					else
-					if (key_pressed & TPGUI_KEY_PRESS_OK)
-						user_action= (key_long_pressed & TPGUI_KEY_PRESS_OK) ? screen->keyOKl_action : screen->keyOK_action;
+					switch (key_info.key_code)
+						{
+
+						case TPGUI_KEY_PRESS_EXIT:
+							{
+							if ((key_info.key_action == KEY_ACTION_SHORT_PRESSED) || (screen->repeatedly_action_permitted && (key_info.key_action == KEY_ACTION_REPEATEDLY_PRESSED)))
+								user_action= screen->keyEX_action;
+							else
+							if (key_info.key_action == KEY_ACTION_LONG_PRESSED)
+								user_action= screen->keyEXl_action;
+							break;
+							}
+
+						case TPGUI_KEY_PRESS_UP:
+							{
+							if ((key_info.key_action == KEY_ACTION_SHORT_PRESSED) || (screen->repeatedly_action_permitted && (key_info.key_action == KEY_ACTION_REPEATEDLY_PRESSED)))
+								user_action= screen->keyUP_action;
+							else
+							if (key_info.key_action == KEY_ACTION_LONG_PRESSED)
+								user_action= screen->keyUPl_action;
+							break;
+							}
+
+						case TPGUI_KEY_PRESS_DOWN:
+							{
+							if ((key_info.key_action == KEY_ACTION_SHORT_PRESSED) || (screen->repeatedly_action_permitted && (key_info.key_action == KEY_ACTION_REPEATEDLY_PRESSED)))
+								user_action= screen->keyDW_action;
+							else
+							if (key_info.key_action == KEY_ACTION_LONG_PRESSED)
+								user_action= screen->keyDWl_action;
+							break;
+							}
+
+						case TPGUI_KEY_PRESS_OK:
+							{
+							if ((key_info.key_action == KEY_ACTION_SHORT_PRESSED) || (screen->repeatedly_action_permitted && (key_info.key_action == KEY_ACTION_REPEATEDLY_PRESSED)))
+								user_action= screen->keyOK_action;
+							else
+							if (key_info.key_action == KEY_ACTION_LONG_PRESSED)
+								user_action= screen->keyOKl_action;
+							break;
+							}
+
+						} // switch (key_info.key_code)
 
 					break;
 					} // TPGUI_SCREEN
@@ -200,17 +221,41 @@ void tpgui_thread(void *params)
 					tpgui_menu_s *menu= (tpgui_menu_s *)current_screen;
 					unsigned char menu_action= 0x00;
 
-					if (key_info.key_code ==  TPGUI_KEY_PRESS_EXIT)
-						user_action= menu->up_menu;
-					else
-					if (key_info.key_code == TPGUI_KEY_PRESS_UP)
-						menu_action= TPGUI_KEY_PRESS_UP;
-					else
-					if (key_info.key_code == TPGUI_KEY_PRESS_DOWN)
-						menu_action= TPGUI_KEY_PRESS_DOWN;
-					else
-					if (key_info.key_code == TPGUI_KEY_PRESS_OK)
-						menu_action= TPGUI_KEY_PRESS_OK;
+					switch (key_info.key_code)
+						{
+
+						case TPGUI_KEY_PRESS_EXIT:
+							{
+							if (key_info.key_action == KEY_ACTION_SHORT_PRESSED)
+								user_action= menu->up_menu;
+							else
+                            if (key_info.key_action == KEY_ACTION_LONG_PRESSED)
+								user_action= NULL; /// main screen
+							break;
+							}
+
+						case TPGUI_KEY_PRESS_UP:
+							{
+							if ((key_info.key_action == KEY_ACTION_SHORT_PRESSED) || (key_info.key_action == KEY_ACTION_LONG_PRESSED) || (key_info.key_action == KEY_ACTION_REPEATEDLY_PRESSED))
+								menu_action= TPGUI_KEY_PRESS_UP;
+							break;
+							}
+
+						case TPGUI_KEY_PRESS_DOWN:
+							{
+							if ((key_info.key_action == KEY_ACTION_SHORT_PRESSED) || (key_info.key_action == KEY_ACTION_LONG_PRESSED) || (key_info.key_action == KEY_ACTION_REPEATEDLY_PRESSED))
+								menu_action= TPGUI_KEY_PRESS_DOWN;
+							break;
+							}
+
+						case TPGUI_KEY_PRESS_OK:
+							{
+							if (key_info.key_action == KEY_ACTION_SHORT_PRESSED)
+								menu_action= TPGUI_KEY_PRESS_OK;
+							break;
+							}
+
+						} // switch (key_info.key_code)
 
 					if (menu_action)
 						user_action= tpgui_menu_action(menu, menu_action);
