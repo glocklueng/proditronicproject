@@ -16,14 +16,16 @@
 
 #define KEYB_SAMPLING_PERIOD				20		// [ms]
 #define KEYB_SHORT_PUSH_TIME				20		// [ms]
-#define KEYB_LONG_PUSH_TIME					500		// [ms]
-#define KEYB_PUSH_REPEATEDLY_TIME			500		// [ms]
+#define KEYB_LONG_PUSH_TIME					500
+#define KEYB_TIME_BEFORE_REPEATEDLY			500
+#define KEYB_PUSH_REPEATEDLY_TIME			500
 
 
 
 #define BUTTON_STATE_RELEASED				0x00
 #define BUTTON_STATE_PUSHED					0x01
-#define BUTTON_STATE_PUSHED_REPEATEDLY		0x02
+#define BUTTON_STATE_BEFORE_REPEATEDLY		0x02
+#define BUTTON_STATE_PUSHED_REPEATEDLY		0x03
 
 
 //------------------------------------------------------------------------------
@@ -62,19 +64,15 @@ void keyboard_thread(void *params);
 
 void keyboard_init()
 	{
-
     key_queue= xQueueCreate(1, sizeof(key_s));
 	wdlist_init(&key_list);
-
 	}
 
 //------------------------------------------------------------------------------
 
 void keyboard_run()
 	{
-
     xTaskCreate(keyboard_thread, "key", 512, NULL, tskIDLE_PRIORITY, NULL);
-
 	}
 
 //------------------------------------------------------------------------------
@@ -162,7 +160,7 @@ void keyboard_thread(void *params)
 
 						if (key->cntr >= (KEYB_LONG_PUSH_TIME / KEYB_SAMPLING_PERIOD))
 							{
-							key->state= BUTTON_STATE_PUSHED_REPEATEDLY;
+							key->state= BUTTON_STATE_BEFORE_REPEATEDLY;
 							key->cntr= 0;
 							
 							key_event.key_code= key->key_code;
@@ -170,6 +168,18 @@ void keyboard_thread(void *params)
                             xQueueSend(key_queue, &key_event, 0);
 
 							printf("PUSHED: KEY_ACTION_LONG_PRESSED\n");
+							}
+
+						break;
+						}
+
+					case BUTTON_STATE_BEFORE_REPEATEDLY:
+						{
+
+						if (key->cntr >= (KEYB_TIME_BEFORE_REPEATEDLY / KEYB_SAMPLING_PERIOD))
+							{
+							key->state= BUTTON_STATE_PUSHED_REPEATEDLY;
+							key->cntr= 0;
 							}
 
 						break;
@@ -265,11 +275,8 @@ void keyboard_thread(void *params)
 				} // releasing
 
 
-
-
 			entry= entry->next;
 			} // while (entry)
-
 
 
 		} // while (1)
@@ -279,10 +286,6 @@ void keyboard_thread(void *params)
 
 //------------------------------------------------------------------------------
 
-
-
 //------------------------------------------------------------------------------
-
-
 //------------------------------------------------------------------------------
 
