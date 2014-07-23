@@ -208,7 +208,9 @@ void tpgui_run(void *start_screen);
 
 
 void tpgui_screen_init(tpgui_screen_s *screen);
+
 void tpgui_screen_item_add(tpgui_screen_s *screen, tpgui_screen_item_s *item);
+void tpgui_screen_item_change_notify(void *valptr);
 
 void tpgui_menu_init(tpgui_menu_s *menu);
 void tpgui_menu_item_add(tpgui_menu_s *menu, tpgui_menu_item_s *item);

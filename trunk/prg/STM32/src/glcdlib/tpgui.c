@@ -47,6 +47,9 @@ unsigned char npage;
 unsigned char menu_first_visible_item_index;
 unsigned char menu_chosen_item_index;
 
+
+void *gcscreen= NULL;
+
 //------------------------------------------------------------------------------
 
 void tpgui_thread(void *params);
@@ -83,18 +86,7 @@ void tpgui_run(void *start_screen)
 	if (!start_screen)
 		return;
 
-	//tpgui_screen_init(&main_screen);
-/*
-	main_screen_label1.type= TPGUI_SI_LABEL;
-	main_screen_label1.attr= 0x00;
-	main_screen_label1.col= 0;
-	main_screen_label1.row= 0;
-	main_screen_label1.len= 10;
-	main_screen_label1.text= "napistestowy";
-
-	tpgui_screen_item_add(&main_screen, (tpgui_screen_item_s *)&main_screen_label1);
-*/
-
+	gcscreen= start_screen;
 
 	xTaskCreate(tpgui_thread, "gui", 512, (void *)start_screen, tskIDLE_PRIORITY, NULL);
 
@@ -145,12 +137,12 @@ void tpgui_thread(void *params)
 			lcd_reset= false;
 			}
 
-        vTaskDelay(TPGUI_SCREEN_REFRESH_PERIOD);
-
-
 		user_action= NULL;
+		gcscreen= current_screen;
 
 
+
+		vTaskDelay(TPGUI_SCREEN_REFRESH_PERIOD);
 
 
 // obs³uga klawiszy
@@ -432,6 +424,21 @@ void tpgui_screen_item_add(tpgui_screen_s *screen, tpgui_screen_item_s *item)
 
 
 	wdlist_append(&screen->item_list, (void *)item);
+	}
+
+//------------------------------------------------------------------------------
+
+void tpgui_screen_item_change_notify(void *valptr)
+	{
+	tpgui_screen_s cscreen= (tpgui_screen_s *)gcscreen;
+
+	if (!valptr)
+		return;
+
+
+
+
+		
 	}
 
 //------------------------------------------------------------------------------
