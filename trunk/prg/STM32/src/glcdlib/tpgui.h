@@ -129,7 +129,7 @@ typedef struct
 
 typedef struct
 	{
-	enum TPGUI_SCREEN_ITEM type;
+	enum TPGUI_SCREEN_ITEM type;	// TPGUI_SI_LABEL
 	bool changed;
 	unsigned char attr;
 
@@ -143,7 +143,7 @@ typedef struct
 
 typedef struct
 	{
-	enum TPGUI_SCREEN_ITEM type;
+	enum TPGUI_SCREEN_ITEM type;	// TPGUI_SI_VARIABLE
 	bool changed;
 	unsigned char attr;
 
@@ -210,7 +210,8 @@ void tpgui_run(void *start_screen);
 void tpgui_screen_init(tpgui_screen_s *screen);
 
 void tpgui_screen_item_add(tpgui_screen_s *screen, tpgui_screen_item_s *item);
-void tpgui_screen_item_change_notify(void *valptr);
+void tpgui_screen_item_change_notify(tpgui_screen_item_s *item);
+
 
 void tpgui_menu_init(tpgui_menu_s *menu);
 void tpgui_menu_item_add(tpgui_menu_s *menu, tpgui_menu_item_s *item);
