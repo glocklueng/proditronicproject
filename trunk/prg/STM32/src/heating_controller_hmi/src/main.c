@@ -82,7 +82,8 @@ extern unsigned char *cmd_inter_strtok_del;
 int test_val;
 float test_val_f;
 time_t czas;
-struct tm utime_tm;
+
+extern struct tm utime_tm;
 
 
 
@@ -143,10 +144,36 @@ int main()
 //	cmd_interpreter_init();
 
 
-	tpgui_screen_init(&main_screen);
-	tpgui_screen_item_add(&main_screen, (tpgui_screen_item_s *)&main_screen_label1);
-	tpgui_screen_item_add(&main_screen, (tpgui_screen_item_s *)&main_screen_label2);
-	//tpgui_screen_item_add(&main_screen, (tpgui_screen_item_s *)&main_screen_label3);
+
+
+
+	tpgui_screen_init(&screen_1);
+	tpgui_screen_item_add(&screen_1, (tpgui_screen_item_s *)&screen_1_label1);
+	tpgui_screen_item_add(&screen_1, (tpgui_screen_item_s *)&screen_1_label2);
+
+
+//	czas= time(0);
+	screen_1_time_label.data_ptr= (void*)&utime_tm;
+	tpgui_screen_item_add(&screen_1, (tpgui_screen_item_s *)&screen_1_time_label);
+
+
+	tpgui_screen_init(&screen_2);
+	tpgui_screen_item_add(&screen_2, (tpgui_screen_item_s *)&screen_2_label1);
+	tpgui_screen_item_add(&screen_2, (tpgui_screen_item_s *)&screen_2_label2);
+
+	tpgui_screen_init(&screen_3);
+	tpgui_screen_item_add(&screen_3, (tpgui_screen_item_s *)&screen_3_label1);
+	tpgui_screen_item_add(&screen_3, (tpgui_screen_item_s *)&screen_3_label2);
+
+	tpgui_screen_init(&screen_4);
+	tpgui_screen_item_add(&screen_4, (tpgui_screen_item_s *)&screen_4_label1);
+	tpgui_screen_item_add(&screen_4, (tpgui_screen_item_s *)&screen_4_label2);
+
+
+
+
+
+
 
 /*
 	test_val= 1024;
@@ -165,7 +192,7 @@ int main()
 	tpgui_screen_item_variable3.data_ptr= (void*)&utime_tm;
 	tpgui_screen_item_add(&main_screen, (tpgui_screen_item_s *)&tpgui_screen_item_variable3);
 */
-
+/*
 	czas= time(0);
 	localtime_r(&czas, &utime_tm);
 	tpgui_screen_item_variable4.data_ptr= (void*)&utime_tm;
@@ -173,9 +200,9 @@ int main()
 
 	tpgui_screen_item_add(&main_screen, (tpgui_screen_item_s *)&main_screen_label4);
 	tpgui_screen_item_add(&main_screen, (tpgui_screen_item_s *)&main_screen_label5);
+*/
 
-
-
+/*
 	tpgui_menu_init(&main_menu);
 	tpgui_menu_item_add(&main_menu, &tpgui_menu_item1);
 	tpgui_menu_item_add(&main_menu, &tpgui_menu_item2);
@@ -185,10 +212,10 @@ int main()
 	tpgui_menu_item_add(&main_menu, &tpgui_menu_item6);
 	tpgui_menu_item_add(&main_menu, &tpgui_menu_item7);
 	tpgui_menu_item_add(&main_menu, &tpgui_menu_item8);
+*/
 
 
-
-	tpgui_run(&main_menu);
+	tpgui_run(&screen_1);
 
 	keyboard_init();
 	keyboard_key_add(0x10, (uint32_t)GPIOC, GPIO_Pin_0);

@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -8,6 +9,7 @@
 
 #include "stm32f10x.h"
 
+#include "tpgui.h"
 #include "wdlist.h"
 #include "keyboard.h"
 
@@ -49,6 +51,10 @@ typedef struct
 wdlist_s key_list;
 xQueueHandle key_queue;
 key_s key_event;
+
+struct tm utime_tm;
+time_t czas, czas_prev;
+extern tpgui_screen_item_variable_s screen_1_time_label;
 
 
 //------------------------------------------------------------------------------
@@ -124,11 +130,32 @@ void keyboard_thread(void *params)
 
 	vTaskDelay(1000); // czekam na podci¹gniêcie wejœæ do plusa
 
+	czas_prev= -1;
 
 	while (1)
 		{
 
         vTaskDelay(KEYB_SAMPLING_PERIOD);
+
+
+        czas= time(0);
+
+        if (czas != czas_prev)
+        	{
+
+            printf("czas: %d\n", czas);
+
+        	localtime_r(&czas, &utime_tm);
+        	tpgui_screen_item_change_notify(&screen_1_time_label);
+
+        	czas_prev= czas;
+        	}
+
+
+        //localtime_r(&czas, &utime_tm);
+
+
+
 
 		entry= key_list.first_entry;
 		while (entry)
