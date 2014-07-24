@@ -56,7 +56,6 @@ enum TPGUI_MENU_ITEM
 
 //------------------------------------------------------------------------------
 
-
 typedef struct
 	{
 	unsigned char type;
@@ -79,15 +78,15 @@ typedef struct
 
 	bool repeatedly_action_permitted;
 	
-	tpgui_action_s *keyOK_action;
-	tpgui_action_s *keyEX_action;
-	tpgui_action_s *keyUP_action;
-	tpgui_action_s *keyDW_action;
+	tpgui_action_s keyOK_action;
+	tpgui_action_s keyEX_action;
+	tpgui_action_s keyUP_action;
+	tpgui_action_s keyDW_action;
 	
-	tpgui_action_s *keyOKl_action;
-	tpgui_action_s *keyEXl_action;
-	tpgui_action_s *keyUPl_action;
-	tpgui_action_s *keyDWl_action;
+	tpgui_action_s keyOKl_action;
+	tpgui_action_s keyEXl_action;
+	tpgui_action_s keyUPl_action;
+	tpgui_action_s keyDWl_action;
 	
 	} tpgui_screen_s;
 

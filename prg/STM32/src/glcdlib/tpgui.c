@@ -143,6 +143,7 @@ void tpgui_thread(void *params)
 
 
 		vTaskDelay(TPGUI_SCREEN_REFRESH_PERIOD);
+//		vTaskDelay(3000);
 
 
 // obs³uga klawiszy
@@ -166,40 +167,45 @@ void tpgui_thread(void *params)
 						case TPGUI_KEY_PRESS_EXIT:
 							{
 							if ((key_info.key_action == KEY_ACTION_SHORT_PRESSED) || (screen->repeatedly_action_permitted && (key_info.key_action == KEY_ACTION_REPEATEDLY_PRESSED)))
-								user_action= screen->keyEX_action;
+								user_action= &screen->keyEX_action;
 							else
 							if (key_info.key_action == KEY_ACTION_LONG_PRESSED)
-								user_action= screen->keyEXl_action;
+								user_action= &screen->keyEXl_action;
 							break;
 							}
 
 						case TPGUI_KEY_PRESS_UP:
 							{
 							if ((key_info.key_action == KEY_ACTION_SHORT_PRESSED) || (screen->repeatedly_action_permitted && (key_info.key_action == KEY_ACTION_REPEATEDLY_PRESSED)))
-								user_action= screen->keyUP_action;
+								{
+								user_action= &screen->keyUP_action;
+
+								printf("user_action: %08X\n", user_action);
+
+								}
 							else
 							if (key_info.key_action == KEY_ACTION_LONG_PRESSED)
-								user_action= screen->keyUPl_action;
+								user_action= &screen->keyUPl_action;
 							break;
 							}
 
 						case TPGUI_KEY_PRESS_DOWN:
 							{
 							if ((key_info.key_action == KEY_ACTION_SHORT_PRESSED) || (screen->repeatedly_action_permitted && (key_info.key_action == KEY_ACTION_REPEATEDLY_PRESSED)))
-								user_action= screen->keyDW_action;
+								user_action= &screen->keyDW_action;
 							else
 							if (key_info.key_action == KEY_ACTION_LONG_PRESSED)
-								user_action= screen->keyDWl_action;
+								user_action= &screen->keyDWl_action;
 							break;
 							}
 
 						case TPGUI_KEY_PRESS_OK:
 							{
 							if ((key_info.key_action == KEY_ACTION_SHORT_PRESSED) || (screen->repeatedly_action_permitted && (key_info.key_action == KEY_ACTION_REPEATEDLY_PRESSED)))
-								user_action= screen->keyOK_action;
+								user_action= &screen->keyOK_action;
 							else
 							if (key_info.key_action == KEY_ACTION_LONG_PRESSED)
-								user_action= screen->keyOKl_action;
+								user_action= &screen->keyOKl_action;
 							break;
 							}
 
@@ -267,6 +273,8 @@ void tpgui_thread(void *params)
 		if (user_action)
 			{
 
+			printf("user_action: TPGUI_SCREEN %08X %02X\n", user_action, user_action->type);
+
 			switch (user_action->type)
 				{
 
@@ -274,9 +282,17 @@ void tpgui_thread(void *params)
 					{
 					// prze³¹czenie ekranu
 
+					printf("user_action2: TPGUI_SCREEN %08X\n", user_action);
+
 					if (user_action->action.screen)
 						{
 						current_screen= (void *)user_action->action.screen;
+
+
+						printf("current_screen:  %08X\n", current_screen);
+
+
+
 						screen_update_f= true;
 						}
 
@@ -328,6 +344,8 @@ void tpgui_thread(void *params)
 			lcd.screen_clear();
 			}
 
+//		printf("#2\n");
+//		printf("current_screen type: %02X\n", ((tpgui_screen_s *)current_screen)->type);
 
 		switch (((tpgui_screen_s *)current_screen)->type)
 			{
@@ -396,6 +414,8 @@ void tpgui_screen_init(tpgui_screen_s *screen)
 	if (!screen)
 		return;
 
+	screen->repeatedly_action_permitted= false;
+
 	wdlist_init(&screen->item_list);
 
 	}
@@ -442,6 +462,8 @@ void tpgui_screen_draw(tpgui_screen_s *gui_screen)
 
 	if (!gui_screen)
 		return;
+
+	//printf("gui_screen: %08X\n", gui_screen);
 
 	wdlist_entry= gui_screen->item_list.first_entry;
 	while (wdlist_entry)
