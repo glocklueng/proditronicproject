@@ -428,17 +428,10 @@ void tpgui_screen_item_add(tpgui_screen_s *screen, tpgui_screen_item_s *item)
 
 //------------------------------------------------------------------------------
 
-void tpgui_screen_item_change_notify(void *valptr)
+void tpgui_screen_item_change_notify(tpgui_screen_item_s *item)
 	{
-	tpgui_screen_s cscreen= (tpgui_screen_s *)gcscreen;
-
-	if (!valptr)
-		return;
-
-
-
-
-		
+	if (item)
+		item->changed= true;
 	}
 
 //------------------------------------------------------------------------------
