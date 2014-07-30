@@ -30,6 +30,7 @@
 #include "sdio_sd.h"
 #include "tpgui.h"
 #include "keyboard.h"
+#include "modbus_mst.h"
 
 
 #include "global.h"
@@ -83,6 +84,9 @@ int test_val;
 float test_val_f;
 time_t czas;
 
+modbus_mst_channel_s modbus_mst_channel;
+
+
 extern struct tm utime_tm;
 
 
@@ -90,6 +94,8 @@ extern struct tm utime_tm;
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
+
+measurement_s temp_tab[NMEASUREMENT];
 
 
 //------------------------------------------------------------------------------
@@ -226,6 +232,7 @@ int main()
 	keyboard_run();
 
 
+
 // odczyt konfiguracji
 
 	if (0)//*cmos1 != 0xA5A5)
@@ -243,7 +250,7 @@ int main()
 
 	
 
-
+	modbus_mst_run(&modbus_mst_channel);
 
 
 	//xTaskCreate(prvCmdInterpreterTask, (signed char *)"CMD", 512, NULL, mainTEMPCTRLPID_TASK_PRIORITY, NULL);

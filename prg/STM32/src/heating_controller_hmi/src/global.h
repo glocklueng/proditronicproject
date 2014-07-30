@@ -7,14 +7,9 @@
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
-
+/*
 #define ONEWIRE_NBUS		4
 #define HEATER_NUMBER		4
-
-
-#define GLOBAL_MODE_IDLE		0x00
-#define GLOBAL_MODE_HEATING		0x01
-
 
 
 
@@ -22,6 +17,14 @@
 #define GPIOB_CLK_ENABLE_BIT	(1 << 1)
 #define GPIOC_CLK_ENABLE_BIT	(1 << 2)
 #define GPIOD_CLK_ENABLE_BIT	(1 << 3)
+*/
+
+#define GLOBAL_MODE_IDLE		0x00
+#define GLOBAL_MODE_HEATING		0x01
+
+
+#define NMEASUREMENT	8
+
 
 
 //-----------------------------------------------------------------------------
@@ -37,10 +40,6 @@ typedef struct
 	k_uchar chn_no;
 //	k_uchar dev_no;
 //	k_uchar id_crc;
-
-
-
-
 
 	} thermometer_cfg_s;
 
@@ -61,6 +60,15 @@ typedef struct
 
 
 	} main_settings_s;
+
+
+typedef struct
+	{
+	int32_t value;
+	uint8_t flag;
+
+
+	} measurement_s;
 
 
 //-----------------------------------------------------------------------------
