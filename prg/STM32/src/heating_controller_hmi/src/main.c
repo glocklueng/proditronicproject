@@ -89,13 +89,80 @@ modbus_mst_channel_s modbus_mst_channel;
 
 extern struct tm utime_tm;
 
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
+uint16_t modbus_addr_poll[]=
+	{
+	0x0400,
+	0x0401,
+	0x0402,
+	0x0403,
+	NULL
+	};
+
+//------------------------------------------------------------------------------
+
+#define MODBUS_ADDR_THERM01				0x400
+#define MODBUS_ADDR_THERM02				0x410
+
+
+
+//------------------------------------------------------------------------------
+
+float therm01_temp= 23.567;
+
+modbus_data_s modbus_dta_therm01_status=
+	{
+	.modbus_addr= MODBUS_ADDR_THERM01,
+	.data_type= MODBUS_DATA_TYPE_INT16,
+	.dataptr= NULL,
+	};
+
+modbus_data_s modbus_dta_therm01_temp=
+	{
+	.modbus_addr= MODBUS_ADDR_THERM01 + 0x01,
+	.data_type= MODBUS_DATA_TYPE_INT16,
+	.dataptr= &screen_1_therm01_temp_label,
+	};
+
+modbus_data_s modbus_dta_therm02_status=
+	{
+	.modbus_addr= MODBUS_ADDR_THERM02,
+	.data_type= MODBUS_DATA_TYPE_INT16,
+	.dataptr= NULL,
+	};
+
+modbus_data_s modbus_dta_therm02_temp=
+	{
+	.modbus_addr= MODBUS_ADDR_THERM02 + 0x01,
+	.data_type= MODBUS_DATA_TYPE_INT16,
+	.dataptr= NULL,
+	};
+
+
+
+
+
+//------------------------------------------------------------------------------
+
+modbus_data_s *modbus_data_poll[]=
+	{
+	&modbus_dta_therm01_status,
+	&modbus_dta_therm01_temp,
+
+	&modbus_dta_therm02_status,
+	&modbus_dta_therm02_temp,
+
+	NULL
+	};
 
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
 
-measurement_s temp_tab[NMEASUREMENT];
+
 
 
 //------------------------------------------------------------------------------
@@ -158,9 +225,13 @@ int main()
 	tpgui_screen_item_add(&screen_1, (tpgui_screen_item_s *)&screen_1_label2);
 
 
-//	czas= time(0);
+
 	screen_1_time_label.data_ptr= (void*)&utime_tm;
 	tpgui_screen_item_add(&screen_1, (tpgui_screen_item_s *)&screen_1_time_label);
+
+	screen_1_therm01_temp_label.data_ptr= &therm01_temp;
+	screen_1_therm01_temp_label.precision= 3;
+	tpgui_screen_item_add(&screen_1, (tpgui_screen_item_s *)&screen_1_therm01_temp_label);
 
 
 	tpgui_screen_init(&screen_2);
@@ -248,7 +319,9 @@ int main()
 
 	main_settings.global_mode= GLOBAL_MODE_HEATING;
 
-	
+	modbus_mst_channel.chno= 1;
+	modbus_mst_channel.modbus_addr_poll= modbus_addr_poll;
+	modbus_mst_channel.modbus_data_poll= modbus_data_poll;
 
 	modbus_mst_run(&modbus_mst_channel);
 
