@@ -125,7 +125,7 @@ tpgui_screen_item_label_s screen_1_label2=
 tpgui_screen_item_variable_s screen_1_time_label=
 	{
 	.type= TPGUI_SI_VARIABLE,
-	.attr= TPGUI_ITEM_ATTRIB_DOUBLESIZE,
+	.attr= 0x00,
 	.col= 0,
 	.row= 2,
 	.len= 8,
@@ -136,6 +136,19 @@ tpgui_screen_item_variable_s screen_1_time_label=
 
 	};
 
+tpgui_screen_item_variable_s screen_1_therm01_temp_label=
+	{
+	.type= TPGUI_SI_VARIABLE,
+	.attr= 0x00,
+	.col= 0,
+	.row= 3,
+	.len= 8,
+	.text= NULL,
+	.data_type= TPGUI_VAR_DATATYPE_FLOAT,
+	.data_ptr= NULL,
+	.precision= 0,
+
+	};
 
 
 //------------------------------------------------------------------------------
